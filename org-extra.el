@@ -112,11 +112,13 @@ Usage:
            'org-babel-load-languages
            org-babel-load-languages))))))
 
+;;;###autoload
 (defun org-extra-back-to-heading ()
   "Move to the heading line of which the present line is a subheading."
   (interactive)
   (org-up-heading-safe))
 
+;;;###autoload
 (defun org-extra-smart-beginning-of-line ()
   "Move point to first non-whitespace character or beginning-of-line."
   (interactive "^")
