@@ -1,0 +1,32 @@
+* org-extra
+
+** Installation
+
+*** Manually
+
+Download repository and it to your load path in your init file:
+
+#+begin_src elisp :eval no
+
+(add-to-list 'load-path "/path/to/org-extra/")
+
+(require 'org-extra)
+
+#+end_src
+
+*** With use-package and straight
+
+#+begin_src elisp :eval no
+
+(use-package org-extra
+  :straight (:repo "KarimAziev/org-extra" :type git :host github))
+
+#+end_src
+
+** Commands
+
++ ~org-extra-smart-beginning-of-line~
+Move point to first non-whitespace character or beginning-of-line.
+
++ ~org-extra-back-to-heading~
+Move to the heading line of which the present line is a subheading.
