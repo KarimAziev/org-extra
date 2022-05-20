@@ -35,8 +35,8 @@
 ;;      Move to the heading line of which the present line is a subheading.
 
 ;; Advice functions
-       `org-extra-src-fontify-advice'
-       `org-extra-babel-before-execute-src-block'
+     ;; `org-extra-src-fontify-advice'
+     ;; `org-extra-babel-before-execute-src-block'
 ;;; Code:
 
 
@@ -178,6 +178,174 @@ Usage:
 	       start end
 	       '(font-lock-fontified t fontified t font-lock-multiline t))
 	      (set-buffer-modified-p modified)))))
+
+(defun org-extra-bounds-of-current-inner-block ()
+  "Inside body of org structure block return list - (BLOCK-TYPE BEGINNING END).
+Beginning and end is bounds of inner content. For example: (example 4292 4486)."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (let ((case-fold-search t))
+        (when (re-search-forward ",#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)" nil t 1)
+          (when-let ((word (match-string-no-properties 1))
+                     (structure-type (match-string-no-properties 2))
+                     (end (match-beginning 0)))
+            (when (string= (downcase word) "end")
+              (let ((prefix
+                     (if (looking-back "," 0)
+                         ","
+                       "")))
+                (when (string= prefix ",")
+                  (setq end (1- end)))
+                (when (re-search-backward (concat prefix
+                                                  "#\\+\\(begin\\)_" "\\("
+                                                  (regexp-quote
+                                                   (downcase structure-type))
+                                                  "\\)" "\\($\\|[\s\f\t\n\r\v]\\)")
+                                          nil t 1)
+                  (forward-line 1)
+                  (list (downcase structure-type)
+                        (point)
+                        end))))))))))
+
+(defun org-extra-bounds-of-current-block ()
+  "Return list of (BLOCK-TYPE BEGINNING END).
+Beginning and end is bounds of inner content. For example: (example 4292 4486)."
+  (save-excursion
+    (save-restriction
+      (widen)
+      (beginning-of-line)
+      (skip-chars-forward "\s\t")
+      (let ((case-fold-search t)
+            (block-start-re
+             "[,]?#\\+\\(begin\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)")
+            (prefix))
+        (if (looking-at block-start-re)
+            (let ((open-block (match-string-no-properties 0))
+                  (block-type (match-string-no-properties 2))
+                  (content-beg (progn (forward-line 1)
+                                      (point))))
+              (setq block-type (downcase block-type))
+              (setq prefix (if (string= "," (substring open-block 0 1)) "," ""))
+              (when (re-search-forward (concat
+                                        prefix "#\\+\\(end\\)_" "\\("
+                                        (regexp-quote
+                                         (downcase block-type))
+                                        "\\)" "\\($\\|[\s\f\t\n\r\v]\\)")
+                                       nil t 1)
+                (let ((content-end (match-beginning 0)))
+                  (list block-type
+                        content-beg
+                        content-end))))
+          (when
+              (re-search-forward
+               "[,]?#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)"
+               nil t 1)
+            (when-let ((word (match-string-no-properties 1))
+                       (prefix (if (string= ","
+                                            (substring-no-properties
+                                             (match-string-no-properties 0)
+                                             0 1))
+                                   ","
+                                 ""))
+                       (structure-type (match-string-no-properties 2))
+                       (end (match-beginning 0)))
+              (when (string= (downcase word) "end")
+                (when (re-search-backward (concat prefix
+                                                  "#\\+\\(begin\\)_" "\\("
+                                                  (regexp-quote
+                                                   (downcase structure-type))
+                                                  "\\)" "\\($\\|[\s\f\t\n\r\v]\\)")
+                                          nil t 1)
+                  (forward-line 1)
+                  (list (downcase structure-type)
+                        (point)
+                        end))))))))))
+
+(defun org-extra-overlay-flash-region (start end &optional face timeout)
+  "Temporarily highlight region from START to END with FACE.
+Default value of TIMEOUT is 0.2 seconds."
+  (let ((overlay (make-overlay start end)))
+    (overlay-put overlay 'face (or face 'diary))
+    (run-with-timer (or timeout 0.2) nil 'delete-overlay overlay)))
+
+(defun org-extra-overlay-prompt-region (beg end fn &rest args)
+	"Highlight region from BEG to END while invoking FN with ARGS."
+  (let ((overlay (make-overlay beg end)))
+    (unwind-protect
+        (progn (overlay-put overlay 'face 'diary)
+               (apply fn args))
+      (delete-overlay overlay))))
+
+(defun org-extra-guess-language (code)
+  "Return the predicted programming language of CODE as a symbol.
+This function use library `language-detection', without it
+result always be nil."
+  (require 'language-detection nil t)
+  (when (fboundp 'language-detection-string)
+    (language-detection-string code)))
+
+(defun org-extra-example-block-to-src (&optional language)
+  "Convert example block at point to src block with LANGUAGE.
+If LANGUAGE is omitted, read it with completions."
+  (interactive)
+  (save-excursion
+    (when-let ((info (org-extra-bounds-of-current-block)))
+      (when (string= (car info) "example")
+        (let ((code-start (nth 1 info))
+              (code-end (nth 2 info))
+              (code)
+              (rep-beg)
+              (prefix))
+          (setq code (buffer-substring-no-properties code-start code-end))
+          (when-let ((src-lang (org-extra-overlay-prompt-region
+                                code-start code-end
+                                (lambda () (completing-read
+                                       "Language: "
+                                       (org-extra-ob-packages)
+                                       nil
+                                       nil
+                                       (when-let
+                                           ((input
+                                             (or language
+                                                 (org-extra-guess-language
+                                                  code))))
+                                         (format "%s" input))
+                                       nil)))))
+            (setq rep-beg (save-excursion
+                            (goto-char code-start)
+                            (forward-line -1)
+                            (skip-chars-forward "\s\t")
+                            (point)))
+            (setq prefix (if (string= ","
+                                      (buffer-substring-no-properties
+                                       rep-beg
+                                       (1+ rep-beg)))
+                             "," ""))
+            (replace-region-contents
+             rep-beg
+             (save-excursion
+               (goto-char code-end)
+               (let ((case-fold-search t))
+                 (re-search-forward
+                  "[,]?#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)")))
+             (lambda ()
+               (concat
+                prefix
+                "#+begin_src " src-lang
+                "\n"
+                code
+                prefix "#+end_src")))))))))
+
+(defun org-extra-example-blocks-to-org (&optional language)
+  "Convert example blocks in buffer to src blocks with LANGUAGE.
+If LANGUAGE is omitted, read it with completions."
+  (interactive)
+  (org-with-wide-buffer
+   (widen)
+   (goto-char (point-max))
+   (while (re-search-backward "#\\+\\(begin\\)_example" nil t 1)
+     (org-extra-example-block-to-src language))))
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
