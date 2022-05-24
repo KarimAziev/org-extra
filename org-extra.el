@@ -89,12 +89,10 @@ by `org-extra-straight-dir-mod-time' - modification time of straight repos
 (defvar org-src-lang-modes)
 (defvar org-babel-load-languages)
 
-(defun org-extra-babel-before-execute-src-block (&optional _arg info _params)
-  "Advice function for `org-babel-execute-src-block' to load language from INFO.
-Usage:
-\(advice-add 'org-babel-execute-src-block :before #'km-org-babel-before-execute-src-block)."
-  (when-let* ((lang (nth 0 info))
-              (sym (intern lang)))
+(defun org-extra-babel-load-language (lang)
+  "Add LANG to `org-babel-load-languages'."
+  (let ((sym (if (stringp lang) (intern lang) lang)))
+    (message "lang: %s" lang)
     (unless (assq sym org-babel-load-languages)
       (let ((cands (delete-dups (append
                                  (list sym)
@@ -108,9 +106,31 @@ Usage:
                               cands))
         (when found
           (add-to-list 'org-babel-load-languages `(,found . t))
-          (org-babel-do-load-languages
-           'org-babel-load-languages
-           org-babel-load-languages))))))
+          (set-default 'org-babel-load-languages org-babel-load-languages)
+          (require (intern (concat "ob-" (symbol-name found)))))))))
+
+(defun org-extra-babel-before-execute-src-block (&optional _arg info _params)
+  "Advice function for `org-babel-execute-src-block' to load language from INFO.
+Usage:
+\(advice-add 'org-babel-execute-src-block :before #'km-org-babel-before-execute-src-block)."
+  (org-extra-babel-load-language (nth 0 info)))
+
+(defun org-extra-load-languages-in-buffer ()
+  "Try to load all src-block languages in current buffer."
+  (let ((langs)
+        (case-fold-search t))
+    (save-excursion
+      (goto-char (point-min))
+	    (while (re-search-forward org-babel-src-block-regexp nil t)
+	      (when (org-babel-active-location-p)
+	        (goto-char (match-beginning 0))
+	        (let ((end-block (match-end 0))
+		            (lang (match-string 2)))
+            (when lang
+              (unless (member lang langs)
+                (push lang langs)
+                (org-extra-babel-load-language lang)))
+	          (goto-char end-block)))))))
 
 ;;;###autoload
 (defun org-extra-back-to-heading ()
