@@ -92,7 +92,6 @@ by `org-extra-straight-dir-mod-time' - modification time of straight repos
 (defun org-extra-babel-load-language (lang)
   "Add LANG to `org-babel-load-languages'."
   (let ((sym (if (stringp lang) (intern lang) lang)))
-    (message "lang: %s" lang)
     (unless (assq sym org-babel-load-languages)
       (let ((cands (delete-dups (append
                                  (list sym)
