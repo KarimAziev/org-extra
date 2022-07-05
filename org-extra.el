@@ -53,6 +53,56 @@
   "Face for the text part of a checked `org-mode' checkbox."
   :group 'org)
 
+(defcustom org-extra-languages-alist '((c . "C")
+                                       (emacslisp . "emacs-lisp")
+                                       (javascript . "js"))
+  "Alist of languages from `language-detection.el' and org babel languages."
+  :group 'org-babel
+  :type '(alist :tag "Languages"
+		            :key-type
+		            (choice
+		             (const :tag "Ada" ada)
+                 (const :tag "Awk" awk)
+                 (const :tag "C" c)
+                 (const :tag "Clojure" clojure)
+                 (const :tag "Cpp" cpp)
+                 (const :tag "Csharp" csharp)
+                 (const :tag "Css" css)
+                 (const :tag "Dart" dart)
+                 (const :tag "Delphi" delphi)
+                 (const :tag "Emacslisp" emacslisp)
+                 (const :tag "Erlang" erlang)
+                 (const :tag "Fortran" fortran)
+                 (const :tag "Fsharp" fsharp)
+                 (const :tag "Go" go)
+                 (const :tag "Groovy" groovy)
+                 (const :tag "Haskell" haskell)
+                 (const :tag "Html" html)
+                 (const :tag "Java" java)
+                 (const :tag "Javascript" javascript)
+                 (const :tag "Json" json)
+                 (const :tag "Latex" latex)
+                 (const :tag "Lisp" lisp)
+                 (const :tag "Lua" lua)
+                 (const :tag "Matlab" matlab)
+                 (const :tag "Objc" objc)
+                 (const :tag "Perl" perl)
+                 (const :tag "Php" php)
+                 (const :tag "Prolog" prolog)
+                 (const :tag "Python" python)
+                 (const :tag "R" r)
+                 (const :tag "Ruby" ruby)
+                 (const :tag "Rust" rust)
+                 (const :tag "Scala" scala)
+                 (const :tag "Shell" shell)
+                 (const :tag "Smalltalk" smalltalk)
+                 (const :tag "Sql" sql)
+                 (const :tag "Swift" swift)
+                 (const :tag "Visualbasic" visualbasic)
+                 (const :tag "Xml" xml)
+                 (symbol :tag "Other"))
+		            :value-type (string :tag "Org babel language")))
+
 (defun org-extra-extend-faces ()
   "Add extra face to `org-mode'."
   (font-lock-add-keywords
@@ -67,6 +117,36 @@
 (defvar org-extra-ob-packages-cached nil
   "List of cached file name bases with trimmed ob-prefix.")
 
+(defvar org-src-lang-modes)
+(defvar org-babel-load-languages)
+
+(defun org-extra-babel-default-loadable-languages ()
+  "Return list of options from variable `org-babel-load-languages'."
+  (mapcar (lambda (it) (car (last it)))
+          (cdr (plist-get (cdr (get
+                                'org-babel-load-languages
+                                'custom-type))
+                          :key-type))))
+
+(defun org-extra-read-babel-languages (prompt &optional predicate require-match
+                                              initial-input hist def
+                                              inherit-input-method)
+  "Read org babel language with PROMPT.
+Optional arguments PREDICATE, REQUIRE-MATCH, INITIAL-INPUT, HIST, DEF and
+INHERIT-INPUT-METHOD have the same meaning as for `completing-read'."
+  (completing-read prompt (delete-dups
+                           (append
+                            (mapcar #'car org-babel-load-languages)
+                            (mapcar (lambda (it) (car (reverse it)))
+                                    (cdr (nth 1
+                                              (memq :key-type
+                                                    (get
+                                                     'org-babel-load-languages
+                                                     'custom-type)))))))
+                   predicate require-match
+                   initial-input hist def
+                   inherit-input-method))
+
 (defun org-extra-ob-packages ()
 	"Search for files prefixed with `ob-' in straight repos directory.
 The returned value is a list of file name bases with trimmed ob-prefix, e.g.
@@ -74,20 +154,23 @@ python for ob-python, julia from ob-julia and so on.
 Result is cached and stored in `org-extra-ob-packages-cached', and invalidated
 by `org-extra-straight-dir-mod-time' - modification time of straight repos
  directory."
-  (let ((mod-time (file-attribute-modification-time (file-attributes
-                                                     (straight--repos-dir)))))
-    (unless (equal mod-time org-extra-straight-dir-mod-time)
-      (setq org-extra-ob-packages-cached
-            (mapcar
-             (lambda (it)
-               (replace-regexp-in-string "^ob-" ""
-                                         (file-name-base it)))
-             (directory-files-recursively (straight--repos-dir) "^ob-.*el$")))
+  (let ((mod-time (file-attribute-modification-time
+                   (file-attributes
+                    (straight--repos-dir)))))
+    (unless (equal mod-time
+                   org-extra-straight-dir-mod-time)
+      (setq
+       org-extra-ob-packages-cached
+       (mapcar
+        (lambda (it)
+          (replace-regexp-in-string
+           "^ob-" ""
+           (file-name-base it)))
+        (directory-files-recursively
+         (straight--repos-dir)
+         "^ob-.*el$")))
       (setq org-extra-straight-dir-mod-time mod-time))
     org-extra-ob-packages-cached))
-
-(defvar org-src-lang-modes)
-(defvar org-babel-load-languages)
 
 (defun org-extra-babel-load-language (lang)
   "Add LANG to `org-babel-load-languages'."
@@ -205,7 +288,8 @@ Beginning and end is bounds of inner content. For example: (example 4292 4486)."
     (save-restriction
       (widen)
       (let ((case-fold-search t))
-        (when (re-search-forward ",#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)" nil t 1)
+        (when (re-search-forward
+               ",#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)" nil t 1)
           (when-let ((word (match-string-no-properties 1))
                      (structure-type (match-string-no-properties 2))
                      (end (match-beginning 0)))
@@ -296,13 +380,29 @@ Default value of TIMEOUT is 0.2 seconds."
                (apply fn args))
       (delete-overlay overlay))))
 
-(defun org-extra-guess-language (code)
-  "Return the predicted programming language of CODE as a symbol.
-This function use library `language-detection', without it
-result always be nil."
-  (require 'language-detection nil t)
-  (when (fboundp 'language-detection-string)
-    (language-detection-string code)))
+(defun org-extra-call-with-overlays (alist-bounds fn &rest args)
+	"Highlight region from ALIST-BOUNDS while invoking FN with ARGS."
+  (let ((overlays (mapcar (lambda (it) (make-overlay (car it) (cdr it)))
+                          alist-bounds)))
+    (unwind-protect
+        (progn
+          (dolist (overlay overlays)
+            (overlay-put overlay 'face 'diary))
+          (apply fn args))
+      (dolist (overlay overlays)
+        (delete-overlay overlay)))))
+
+(defun org-extra-read-language (code)
+  "Read org language using detected language in CODE as initial input.
+This function use library `language-detection'."
+  (let ((detected-lang (when (and
+                              (require 'language-detection nil t)
+                              (fboundp 'language-detection-string))
+                         (alist-get (language-detection-string code)
+                                    org-extra-languages-alist))))
+    (org-extra-read-babel-languages "Language: " nil nil
+                                    detected-lang
+                                    nil detected-lang)))
 
 (defun org-extra-example-block-to-src (&optional language)
   "Convert example block at point to src block with LANGUAGE.
@@ -310,51 +410,67 @@ If LANGUAGE is omitted, read it with completions."
   (interactive)
   (save-excursion
     (when-let ((info (org-extra-bounds-of-current-block)))
-      (when (string= (car info) "example")
-        (let ((code-start (nth 1 info))
-              (code-end (nth 2 info))
-              (code)
-              (rep-beg)
-              (prefix))
-          (setq code (buffer-substring-no-properties code-start code-end))
-          (when-let ((src-lang (org-extra-overlay-prompt-region
-                                code-start code-end
-                                (lambda () (completing-read
-                                       "Language: "
-                                       (org-extra-ob-packages)
-                                       nil
-                                       nil
-                                       (when-let
-                                           ((input
-                                             (or language
-                                                 (org-extra-guess-language
-                                                  code))))
-                                         (format "%s" input))
-                                       nil)))))
-            (setq rep-beg (save-excursion
-                            (goto-char code-start)
-                            (forward-line -1)
-                            (skip-chars-forward "\s\t")
-                            (point)))
-            (setq prefix (if (string= ","
-                                      (buffer-substring-no-properties
+      (let ((code-start (nth 1 info))
+            (code-end (nth 2 info))
+            (type (downcase (car info)))
+            (content)
+            (rep-beg)
+            (rep-end)
+            (prefix)
+            (suffix)
+            (alist-bounds))
+        (setq rep-beg (save-excursion
+                        (goto-char code-start)
+                        (forward-line -1)
+                        (skip-chars-forward "\s\t")
+                        (point)))
+        (setq prefix (if (string= "," (buffer-substring-no-properties
                                        rep-beg
                                        (1+ rep-beg)))
-                             "," ""))
-            (replace-region-contents
-             rep-beg
-             (save-excursion
-               (goto-char code-end)
-               (let ((case-fold-search t))
-                 (re-search-forward
-                  "[,]?#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)")))
-             (lambda ()
-               (concat
-                prefix
-                "#+begin_src " src-lang
-                "\n"
-                code
-                prefix "#+end_src")))))))))
+                         "," ""))
+        (setq rep-end (save-excursion
+                        (goto-char code-end)
+                        (let ((case-fold-search t))
+                          (re-search-forward
+                           (concat "[,]?#\\+\\(begin\\|end\\)_" type
+                                   "\\($\\|[\s\f\t\n\r\v]\\)")
+                           nil t 1))))
+        (setq content (buffer-substring-no-properties code-start code-end))
+        (setq alist-bounds (list (cons (save-excursion (goto-char rep-beg)
+                                                       (line-end-position))
+                                       rep-beg)
+                                 (cons (save-excursion (goto-char rep-end)
+                                                       (line-beginning-position))
+                                       rep-end)))
+        (setq suffix
+              (org-extra-call-with-overlays
+               alist-bounds
+               (lambda () (completing-read
+                      "Replace with"
+                      (mapcar #'cdr
+                              org-structure-template-alist)))))
+        (pcase suffix
+          ("src" (setq suffix (concat
+                               suffix " "
+                               (or language
+                                   (org-extra-overlay-prompt-region
+                                    code-start code-end
+                                    (lambda () (org-extra-read-language
+                                           content))))))))
+        (replace-region-contents
+         rep-beg
+         rep-end
+         (lambda ()
+           (concat
+            (string-join
+             (delete nil (list prefix "#+begin_" suffix)) "")
+            "\n"
+            content
+            (string-join
+             (delete nil
+                     (list prefix "#+end_"
+                           (car
+                            (split-string suffix nil t))))))))))))
 
 (defun org-extra-example-blocks-to-org (&optional language)
   "Convert example blocks in buffer to src blocks with LANGUAGE.
