@@ -229,11 +229,16 @@ Usage:
       (progn (forward-char -1)
              (while (invisible-p (point))
                (forward-char -1))
-             (beginning-of-line))
-    (let ((oldpos (point)))
-      (back-to-indentation)
-      (and (= oldpos (point))
-           (beginning-of-line)))))
+             (when (re-search-backward "\n" nil t 1)
+               (forward-char 1))
+             (back-to-indentation))
+    (progn
+      (let ((old-pos (point)))
+        (back-to-indentation)
+        (and (= old-pos (point))
+             (if (re-search-backward "\n" nil t 1)
+                 (forward-char 1)
+               (beginning-of-line)))))))
 
 (defun org-extra-src-fontify-advice (lang start end)
   "Fontify code block between START and END using LANG's syntax.
@@ -481,6 +486,37 @@ If LANGUAGE is omitted, read it with completions."
    (goto-char (point-max))
    (while (re-search-backward "#\\+\\(begin\\)_example" nil t 1)
      (org-extra-example-block-to-src language))))
+
+(defun org-extra-add-names-to-src-blocks ()
+  "Add names to all src blocks if package `org-extra-complete' installed."
+  (require 'org-extra-complete nil t)
+  (interactive)
+  (widen)
+  (org-babel-map-src-blocks buffer-read-only
+    (goto-char beg-block)
+    (beginning-of-line)
+    (while (and
+            (not (bobp))
+            (looking-at "#\\+")
+            (not (looking-at "#\\+name:")))
+      (forward-line -1))
+    (unless (looking-at "#\\+name:[\s\t][a-z0-9]+")
+      (org-extra-overlay-flash-region (line-beginning-position) (line-end-position) nil 1000)
+      (org-show-all)
+      (if (looking-at "#\\+name:")
+          (progn
+            (re-search-forward "#\\+name:" nil t 1)
+            (skip-chars-forward "\s\t")
+            (if (fboundp 'org-extra-complete)
+                (org-extra-complete)
+              (insert (concat (if (looking-back ":" 0) " " "")
+                              (read-string "#\\+name: ")))))
+        (when-let ((name (if (fboundp 'org-extra-complete-name)
+                             (org-extra-complete-name)
+                           (read-string "#\\+name: "))))
+          (insert (concat "\n" "#+name: " name (if (looking-at "[\s\t]*\n")
+                                                   ""
+                                                 "\n"))))))))
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
