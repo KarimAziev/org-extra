@@ -193,8 +193,12 @@ by `org-extra-straight-dir-mod-time' - modification time of straight repos
 
 (defun org-extra-babel-before-execute-src-block (&optional _arg info _params)
   "Advice function for `org-babel-execute-src-block' to load language from INFO.
+
 Usage:
-\(advice-add 'org-babel-execute-src-block :before #'km-org-babel-before-execute-src-block)."
+
+
+\\=(advice-add \\='org-babel-execute-src-block
+              :before #\\='org-extra-babel-before-execute-src-block)."
   (org-extra-babel-load-language (nth 0 info)))
 
 (defun org-extra-load-languages-in-buffer ()
@@ -247,8 +251,8 @@ is that this function delay language mode hooks to increase speedup.
 
 Usage:
 
-\(advice-add #'org-src-font-lock-fontify-block
-  :override #'org-extra-src-fontify-advice)."
+\=(advice-add #\='org-src-font-lock-fontify-block
+              :override #\='org-extra-src-fontify-advice)."
   (let ((lang-mode (org-src-get-lang-mode lang)))
     (when (fboundp lang-mode)
       (let ((string (buffer-substring-no-properties start end))
@@ -263,7 +267,8 @@ Usage:
 	          ;; Add string and a final space to ensure property change.
 	          (insert string " "))
           (delay-mode-hooks
-            (unless (eq major-mode lang-mode) (funcall lang-mode))
+            (unless (eq major-mode lang-mode)
+              (funcall lang-mode))
 	          (font-lock-ensure)
 	          (let ((pos (point-min)) next)
 	            (while (setq next (next-property-change pos))
@@ -272,13 +277,15 @@ Usage:
 	              (dolist (prop (cons 'face font-lock-extra-managed-props))
 		              (let ((new-prop (get-text-property pos prop)))
 		                (put-text-property
-		                 (+ start (1- pos)) (1- (+ start next)) prop new-prop
+		                 (+ start (1- pos))
+                     (1- (+ start next)) prop new-prop
 		                 org-buffer)))
 	              (setq pos next)))
             (set-buffer-modified-p nil)))
 	      ;; Add Org faces.
 	      (let ((src-face (nth 1 (assoc-string lang org-src-block-faces t))))
-          (when (or (facep src-face) (listp src-face))
+          (when (or (facep src-face)
+                    (listp src-face))
             (font-lock-append-text-property start end 'face src-face))
 	        (font-lock-append-text-property start end 'face 'org-block))
 	      (add-text-properties
@@ -489,8 +496,8 @@ If LANGUAGE is omitted, read it with completions."
 
 (defun org-extra-add-names-to-src-blocks ()
   "Add names to all src blocks if package `org-extra-complete' installed."
-  (require 'org-extra-complete nil t)
   (interactive)
+  (require 'org-extra-complete nil t)
   (widen)
   (org-babel-map-src-blocks buffer-read-only
     (goto-char beg-block)
@@ -501,8 +508,9 @@ If LANGUAGE is omitted, read it with completions."
             (not (looking-at "#\\+name:")))
       (forward-line -1))
     (unless (looking-at "#\\+name:[\s\t][a-z0-9]+")
-      (org-extra-overlay-flash-region (line-beginning-position) (line-end-position) nil 1000)
-      (org-show-all)
+      (org-extra-overlay-flash-region (line-beginning-position)
+                                      (line-end-position) nil 1000)
+      (org-fold-show-all)
       (if (looking-at "#\\+name:")
           (progn
             (re-search-forward "#\\+name:" nil t 1)
