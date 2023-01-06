@@ -59,9 +59,9 @@
   "Alist of languages from `language-detection.el' and org babel languages."
   :group 'org-babel
   :type '(alist :tag "Languages"
-		            :key-type
-		            (choice
-		             (const :tag "Ada" ada)
+                :key-type
+                (choice
+                 (const :tag "Ada" ada)
                  (const :tag "Awk" awk)
                  (const :tag "C" c)
                  (const :tag "Clojure" clojure)
@@ -101,7 +101,7 @@
                  (const :tag "Visualbasic" visualbasic)
                  (const :tag "Xml" xml)
                  (symbol :tag "Other"))
-		            :value-type (string :tag "Org babel language")))
+                :value-type (string :tag "Org babel language")))
 
 (defun org-extra-extend-faces ()
   "Add extra face to `org-mode'."
@@ -148,7 +148,7 @@ INHERIT-INPUT-METHOD have the same meaning as for `completing-read'."
                    inherit-input-method))
 
 (defun org-extra-ob-packages ()
-	"Search for files prefixed with `ob-' in straight repos directory.
+  "Search for files prefixed with `ob-' in straight repos directory.
 The returned value is a list of file name bases with trimmed ob-prefix, e.g.
 python for ob-python, julia from ob-julia and so on.
 Result is cached and stored in `org-extra-ob-packages-cached', and invalidated
@@ -207,16 +207,16 @@ Usage:
         (case-fold-search t))
     (save-excursion
       (goto-char (point-min))
-	    (while (re-search-forward org-babel-src-block-regexp nil t)
-	      (when (org-babel-active-location-p)
-	        (goto-char (match-beginning 0))
-	        (let ((end-block (match-end 0))
-		            (lang (match-string 2)))
+      (while (re-search-forward org-babel-src-block-regexp nil t)
+        (when (org-babel-active-location-p)
+          (goto-char (match-beginning 0))
+          (let ((end-block (match-end 0))
+                (lang (match-string 2)))
             (when lang
               (unless (member lang langs)
                 (push lang langs)
                 (org-extra-babel-load-language lang)))
-	          (goto-char end-block)))))))
+            (goto-char end-block)))))))
 
 ;;;###autoload
 (defun org-extra-back-to-heading ()
@@ -256,42 +256,42 @@ Usage:
   (let ((lang-mode (org-src-get-lang-mode lang)))
     (when (fboundp lang-mode)
       (let ((string (buffer-substring-no-properties start end))
-	          (modified (buffer-modified-p))
-	          (org-buffer (current-buffer)))
-	      (remove-text-properties start end '(face nil))
-	      (with-current-buffer
-	          (get-buffer-create
-	           (format " *org-src-fontification:%s*" lang-mode))
-	        (let ((inhibit-modification-hooks nil))
-	          (erase-buffer)
-	          ;; Add string and a final space to ensure property change.
-	          (insert string " "))
+            (modified (buffer-modified-p))
+            (org-buffer (current-buffer)))
+        (remove-text-properties start end '(face nil))
+        (with-current-buffer
+            (get-buffer-create
+             (format " *org-src-fontification:%s*" lang-mode))
+          (let ((inhibit-modification-hooks nil))
+            (erase-buffer)
+            ;; Add string and a final space to ensure property change.
+            (insert string " "))
           (delay-mode-hooks
             (unless (eq major-mode lang-mode)
               (funcall lang-mode))
-	          (font-lock-ensure)
-	          (let ((pos (point-min)) next)
-	            (while (setq next (next-property-change pos))
-	              ;; Handle additional properties from font-lock, so as to
-	              ;; preserve, e.g., composition.
-	              (dolist (prop (cons 'face font-lock-extra-managed-props))
-		              (let ((new-prop (get-text-property pos prop)))
-		                (put-text-property
-		                 (+ start (1- pos))
+            (font-lock-ensure)
+            (let ((pos (point-min)) next)
+              (while (setq next (next-property-change pos))
+                ;; Handle additional properties from font-lock, so as to
+                ;; preserve, e.g., composition.
+                (dolist (prop (cons 'face font-lock-extra-managed-props))
+                  (let ((new-prop (get-text-property pos prop)))
+                    (put-text-property
+                     (+ start (1- pos))
                      (1- (+ start next)) prop new-prop
-		                 org-buffer)))
-	              (setq pos next)))
+                     org-buffer)))
+                (setq pos next)))
             (set-buffer-modified-p nil)))
-	      ;; Add Org faces.
-	      (let ((src-face (nth 1 (assoc-string lang org-src-block-faces t))))
+        ;; Add Org faces.
+        (let ((src-face (nth 1 (assoc-string lang org-src-block-faces t))))
           (when (or (facep src-face)
                     (listp src-face))
             (font-lock-append-text-property start end 'face src-face))
-	        (font-lock-append-text-property start end 'face 'org-block))
-	      (add-text-properties
-	       start end
-	       '(font-lock-fontified t fontified t font-lock-multiline t))
-	      (set-buffer-modified-p modified)))))
+          (font-lock-append-text-property start end 'face 'org-block))
+        (add-text-properties
+         start end
+         '(font-lock-fontified t fontified t font-lock-multiline t))
+        (set-buffer-modified-p modified)))))
 
 (defun org-extra-bounds-of-current-inner-block ()
   "Inside body of org structure block return list - (BLOCK-TYPE BEGINNING END).
@@ -385,7 +385,7 @@ Default value of TIMEOUT is 0.2 seconds."
     (run-with-timer (or timeout 0.2) nil 'delete-overlay overlay)))
 
 (defun org-extra-overlay-prompt-region (beg end fn &rest args)
-	"Highlight region from BEG to END while invoking FN with ARGS."
+  "Highlight region from BEG to END while invoking FN with ARGS."
   (let ((overlay (make-overlay beg end)))
     (unwind-protect
         (progn (overlay-put overlay 'face 'diary)
@@ -393,7 +393,7 @@ Default value of TIMEOUT is 0.2 seconds."
       (delete-overlay overlay))))
 
 (defun org-extra-call-with-overlays (alist-bounds fn &rest args)
-	"Highlight region from ALIST-BOUNDS while invoking FN with ARGS."
+  "Highlight region from ALIST-BOUNDS while invoking FN with ARGS."
   (let ((overlays (mapcar (lambda (it) (make-overlay (car it) (cdr it)))
                           alist-bounds)))
     (unwind-protect
@@ -416,8 +416,8 @@ This function use library `language-detection'."
                                     detected-lang
                                     nil detected-lang)))
 
-(defun org-extra-example-block-to-src (&optional language)
-  "Convert example block at point to src block with LANGUAGE.
+(defun org-extra-example-block-to-src (&optional language suffix)
+  "Convert example block at point to begin/end_SUFFIX with LANGUAGE.
 If LANGUAGE is omitted, read it with completions."
   (interactive)
   (save-excursion
@@ -429,7 +429,7 @@ If LANGUAGE is omitted, read it with completions."
             (rep-beg)
             (rep-end)
             (prefix)
-            (suffix)
+            (suffix suffix)
             (alist-bounds))
         (setq rep-beg (save-excursion
                         (goto-char code-start)
@@ -448,27 +448,32 @@ If LANGUAGE is omitted, read it with completions."
                                    "\\($\\|[\s\f\t\n\r\v]\\)")
                            nil t 1))))
         (setq content (buffer-substring-no-properties code-start code-end))
-        (setq alist-bounds (list (cons (save-excursion (goto-char rep-beg)
-                                                       (line-end-position))
+        (setq alist-bounds (list (cons (save-excursion
+                                         (goto-char rep-beg)
+                                         (line-end-position))
                                        rep-beg)
-                                 (cons (save-excursion (goto-char rep-end)
-                                                       (line-beginning-position))
-                                       rep-end)))
+                                 (cons
+                                  (save-excursion
+                                    (goto-char rep-end)
+                                    (line-beginning-position))
+                                  rep-end)))
         (setq suffix
-              (org-extra-call-with-overlays
-               alist-bounds
-               (lambda () (completing-read
-                      "Replace with"
-                      (mapcar #'cdr
-                              org-structure-template-alist)))))
+              (or suffix (org-extra-call-with-overlays
+                          alist-bounds
+                          (lambda ()
+                            (completing-read
+                             "Replace with"
+                             (mapcar #'cdr
+                                     org-structure-template-alist))))))
         (pcase suffix
           ("src" (setq suffix (concat
                                suffix " "
                                (or language
                                    (org-extra-overlay-prompt-region
                                     code-start code-end
-                                    (lambda () (org-extra-read-language
-                                           content))))))))
+                                    (lambda ()
+                                      (org-extra-read-language
+                                       content))))))))
         (replace-region-contents
          rep-beg
          rep-end
@@ -484,15 +489,15 @@ If LANGUAGE is omitted, read it with completions."
                            (car
                             (split-string suffix nil t))))))))))))
 
-(defun org-extra-example-blocks-to-org (&optional language)
-  "Convert example blocks in buffer to src blocks with LANGUAGE.
+(defun org-extra-example-blocks-to-org (&optional language suffix)
+  "Convert example blocks in buffer to begin/end_SUFFIX blocks with LANGUAGE.
 If LANGUAGE is omitted, read it with completions."
   (interactive)
   (org-with-wide-buffer
    (widen)
    (goto-char (point-max))
    (while (re-search-backward "#\\+\\(begin\\)_example" nil t 1)
-     (org-extra-example-block-to-src language))))
+     (org-extra-example-block-to-src language suffix))))
 
 (defun org-extra-add-names-to-src-blocks ()
   "Add names to all src blocks if package `org-extra-complete' installed."
