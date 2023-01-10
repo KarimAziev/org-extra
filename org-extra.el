@@ -45,6 +45,11 @@
 
 (defvar org-src-block-faces)
 
+(defconst org-extra-preview-data-root
+  (file-name-directory (if (bound-and-true-p load-file-name) load-file-name
+                         (buffer-file-name)))
+  "The directory where `org-extra' package exists.")
+
 (declare-function org-src-get-lang-mode "org-src")
 (declare-function org-up-heading-safe "org")
 
@@ -530,6 +535,26 @@ If LANGUAGE is omitted, read it with completions."
           (insert (concat "\n" "#+name: " name (if (looking-at "[\s\t]*\n")
                                                    ""
                                                  "\n"))))))))
+
+(defun org-extra-get-html-head ()
+  "Return string with custom styles for `org-html-head'."
+  (let ((content (with-temp-buffer
+                   (erase-buffer)
+                   (insert-file-contents (expand-file-name
+                                          "org-html-head.css"
+                                          org-extra-preview-data-root))
+                   (buffer-string))))
+    (format "<style type=\"text/css\">\n%s</style>" content)))
+
+(defun org-extra-get-html-scripts ()
+  "Return string with custom styles for `org-html-scripts'."
+  (let ((content (with-temp-buffer
+                   (erase-buffer)
+                   (insert-file-contents (expand-file-name
+                                          "org-html-scripts.js"
+                                          org-extra-preview-data-root))
+                   (buffer-string))))
+    (format "<script type=\"text/javascript\">\n%s</script>" content)))
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
