@@ -6,7 +6,7 @@
 ;; URL: https://github.com/KarimAziev/org-extra
 ;; Keywords: outlines
 ;; Version: 0.1.1
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "27.1") (org "9.6.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -22,6 +22,7 @@
 ;;
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 ;;; Commentary:
 
 ;; This file configures operations with extra
@@ -298,35 +299,6 @@ Usage:
          '(font-lock-fontified t fontified t font-lock-multiline t))
         (set-buffer-modified-p modified)))))
 
-(defun org-extra-bounds-of-current-inner-block ()
-  "Inside body of org structure block return list - (BLOCK-TYPE BEGINNING END).
-Beginning and end is bounds of inner content. For example: (example 4292 4486)."
-  (save-excursion
-    (save-restriction
-      (widen)
-      (let ((case-fold-search t))
-        (when (re-search-forward
-               ",#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)" nil t 1)
-          (when-let ((word (match-string-no-properties 1))
-                     (structure-type (match-string-no-properties 2))
-                     (end (match-beginning 0)))
-            (when (string= (downcase word) "end")
-              (let ((prefix
-                     (if (looking-back "," 0)
-                         ","
-                       "")))
-                (when (string= prefix ",")
-                  (setq end (1- end)))
-                (when (re-search-backward (concat prefix
-                                                  "#\\+\\(begin\\)_" "\\("
-                                                  (regexp-quote
-                                                   (downcase structure-type))
-                                                  "\\)" "\\($\\|[\s\f\t\n\r\v]\\)")
-                                          nil t 1)
-                  (forward-line 1)
-                  (list (downcase structure-type)
-                        (point)
-                        end))))))))))
 
 (defun org-extra-bounds-of-current-block ()
   "Return list of (BLOCK-TYPE BEGINNING END).
@@ -421,6 +393,7 @@ This function use library `language-detection'."
                                     detected-lang
                                     nil detected-lang)))
 
+;;;###autoload
 (defun org-extra-example-block-to-src (&optional language suffix)
   "Convert example block at point to begin/end_SUFFIX with LANGUAGE.
 If LANGUAGE is omitted, read it with completions."
@@ -494,6 +467,7 @@ If LANGUAGE is omitted, read it with completions."
                            (car
                             (split-string suffix nil t))))))))))))
 
+;;;###autoload
 (defun org-extra-example-blocks-to-org (&optional language suffix)
   "Convert example blocks in buffer to begin/end_SUFFIX blocks with LANGUAGE.
 If LANGUAGE is omitted, read it with completions."
@@ -504,37 +478,41 @@ If LANGUAGE is omitted, read it with completions."
    (while (re-search-backward "#\\+\\(begin\\)_example" nil t 1)
      (org-extra-example-block-to-src language suffix))))
 
+;;;###autoload
 (defun org-extra-add-names-to-src-blocks ()
   "Add names to all src blocks if package `org-extra-complete' installed."
   (interactive)
   (require 'org-extra-complete nil t)
   (widen)
   (org-babel-map-src-blocks buffer-read-only
-    (goto-char beg-block)
-    (beginning-of-line)
-    (while (and
-            (not (bobp))
-            (looking-at "#\\+")
-            (not (looking-at "#\\+name:")))
-      (forward-line -1))
-    (unless (looking-at "#\\+name:[\s\t][a-z0-9]+")
-      (org-extra-overlay-flash-region (line-beginning-position)
-                                      (line-end-position) nil 1000)
-      (org-fold-show-all)
-      (if (looking-at "#\\+name:")
-          (progn
-            (re-search-forward "#\\+name:" nil t 1)
-            (skip-chars-forward "\s\t")
-            (if (fboundp 'org-extra-complete)
-                (org-extra-complete)
-              (insert (concat (if (looking-back ":" 0) " " "")
-                              (read-string "#\\+name: ")))))
-        (when-let ((name (if (fboundp 'org-extra-complete-name)
-                             (org-extra-complete-name)
-                           (read-string "#\\+name: "))))
-          (insert (concat "\n" "#+name: " name (if (looking-at "[\s\t]*\n")
-                                                   ""
-                                                 "\n"))))))))
+    (let ((case-fold-search t))
+      (goto-char beg-block)
+      (recenter-top-bottom)
+      (while (and
+              (not (bobp))
+              (looking-at "[\s\t]*#\\+")
+              (not (looking-at "[\s\t]*#\\+name:")))
+        (forward-line -1))
+      (unless (looking-at "[\s\t]*#\\+name:[\s\t][a-z0-9]+")
+        (org-fold-show-all)
+        (if (looking-at "[\s\t]*#\\+name:")
+            (progn
+              (re-search-forward "#\\+name:" nil t 1)
+              (skip-chars-forward "\s\t")
+              (if (fboundp 'org-extra-complete)
+                  (org-extra-complete)
+                (insert (concat (if (looking-back ":" 0) " " "")
+                                (read-string "#\\+name: ")))))
+          (when-let ((name (org-extra-overlay-prompt-region
+                            (line-beginning-position)
+                            (line-end-position)
+                            (lambda ()
+                              (if (fboundp 'org-extra-complete-name)
+                                  (org-extra-complete-name)
+                                (read-string "#\\+name: "))))))
+            (insert (concat "\n" "#+name: " name (if (looking-at "[\s\t]*\n")
+                                                     ""
+                                                   "\n")))))))))
 
 (defun org-extra-get-html-head ()
   "Return string with custom styles for `org-html-head'."
@@ -555,6 +533,16 @@ If LANGUAGE is omitted, read it with completions."
                                           org-extra-preview-data-root))
                    (buffer-string))))
     (format "<script type=\"text/javascript\">\n%s</script>" content)))
+
+;;;###autoload
+(defun org-extra-narrow-to-block-content ()
+  "Narrow to inner content of current block."
+  (interactive)
+  (if (buffer-narrowed-p)
+      (widen)
+    (pcase-let ((`(,_type ,beg ,end)
+                 (org-extra-bounds-of-current-block)))
+      (narrow-to-region beg end))))
 
 (provide 'org-extra)
 ;;; org-extra.el ends here

@@ -21,6 +21,15 @@
       target.scrollIntoView();
     }
   }
+  function toggleSideMenu() {
+    document.querySelector('#table-of-contents').classList.toggle('open');
+  }
+  function initSideMenu() {
+    const title = document.querySelector('#table-of-contents h2');
+    if (title) {
+      title.addEventListener('click', toggleSideMenu);
+    }
+  }
   function addHighlightRefs() {
     document.querySelectorAll('.coderef').forEach((el) => {
       const targetId =
@@ -43,7 +52,7 @@
       const sun = '🌞';
       const thumb = document.createElement('div');
       thumb.style.cssText = `position: absolute;
-                             top: 0px;
+                             top: -1px;
                              left: 1px;
                              width: 22px;
                              height: 22px;
@@ -67,7 +76,7 @@
         }
       };
       toggleButtonElem.onclick = handleClick;
-      toggleButtonElem.style.cssText = `position:fixed;
+      toggleButtonElem.style.cssText = `position:absolute;
                                         z-index: 9999;
                                         right: 5px;
                                         cursor: pointer;
@@ -176,5 +185,6 @@ transition: 0.3s;`;
     document.querySelectorAll('pre').forEach(makeCopyable);
   };
   makePreCopyable();
+  initSideMenu();
   initDarkTheme();
 });
