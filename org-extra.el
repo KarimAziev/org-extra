@@ -41,7 +41,7 @@
 ;;; Code:
 
 (require 'org)
-(require 'straight)
+(require 'straight nil t)
 (require 'transient)
 (defvar org-src-block-faces)
 (defconst org-extra-preview-data-root
@@ -159,23 +159,25 @@ python for ob-python, julia from ob-julia and so on.
 Result is cached and stored in `org-extra-ob-packages-cached', and invalidated
 by `org-extra-straight-dir-mod-time' - modification time of straight repos
  directory."
-  (let ((mod-time (file-attribute-modification-time
-                   (file-attributes
-                    (straight--repos-dir)))))
-    (unless (equal mod-time
-                   org-extra-straight-dir-mod-time)
-      (setq
-       org-extra-ob-packages-cached
-       (mapcar
-        (lambda (it)
-          (replace-regexp-in-string
-           "^ob-" ""
-           (file-name-base it)))
-        (directory-files-recursively
-         (straight--repos-dir)
-         "^ob-.*el$")))
-      (setq org-extra-straight-dir-mod-time mod-time))
-    org-extra-ob-packages-cached))
+  (when (fboundp 'straight--repos-dir)
+    (straight--repos-dir)
+    (let ((mod-time (file-attribute-modification-time
+                     (file-attributes
+                      (straight--repos-dir)))))
+      (unless (equal mod-time
+                     org-extra-straight-dir-mod-time)
+        (setq
+         org-extra-ob-packages-cached
+         (mapcar
+          (lambda (it)
+            (replace-regexp-in-string
+             "^ob-" ""
+             (file-name-base it)))
+          (directory-files-recursively
+           (straight--repos-dir)
+           "^ob-.*el$")))
+        (setq org-extra-straight-dir-mod-time mod-time))
+      org-extra-ob-packages-cached)))
 
 (defun org-extra-babel-load-language (lang)
   "Add LANG to `org-babel-load-languages'."
@@ -601,9 +603,10 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
   "Transient menu for Refresh/Reload commands."
   [("r" "Refresh setup current buffer" org-mode-restart)
    ("e" "Reload Org (after update) (C-c C-x !)" org-reload)
-   ("l" "Reload Org uncompiled" (lambda ()
-                                  (interactive)
-                                  (org-reload t)))])
+   ("l" "Reload Org uncompiled"
+    (lambda ()
+      (interactive)
+      (org-reload t)))])
 
 ;;;###autoload (autoload 'org-extra-customize-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-customize-menu ()
