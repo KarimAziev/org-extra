@@ -225,11 +225,52 @@ Usage:
                 (org-extra-babel-load-language lang)))
             (goto-char end-block)))))))
 
+(defcustom org-extra-eldoc-flags-functions '(elisp-eldoc-var-docstring
+                                             org-extra-eldoc-funcall)
+  "List of additional eldoc functions."
+  :group 'org-extra
+  :type '(repeat
+          (radio
+           (function-item elisp-eldoc-var-docstring)
+           (function-item org-extra-eldoc-funcall)
+           (function :tag "Custom function"))))
+
+(defun org-extra-eldoc-elisp ()
+  "Add elisp documentation in org mode."
+  (dolist (fn org-extra-eldoc-flags-functions)
+    (add-hook 'eldoc-documentation-functions fn nil t)))
+
+;;;###autoload
+(define-minor-mode org-extra-eldoc-mode
+  "Add more eldoc functions when this mode is turned on."
+  :lighter " org-eldoc+"
+  :global nil
+  (let ((worker (if org-extra-eldoc-mode 'add-hook 'remove-hook)))
+    (dolist (fn org-extra-eldoc-flags-functions)
+      (funcall worker 'eldoc-documentation-functions fn nil t))))
+
+
+(defun org-extra-eldoc-funcall (_callback &rest _ignored)
+  "Fix Symbol’s value as variable is void: elisp-eldoc-funcallorg-mode'."
+  (when (org-extra-bounds-of-current-block)
+    (let* ((sym-info (elisp--fnsym-in-current-sexp))
+           (fn-sym (car sym-info)))
+      (when (fboundp fn-sym)
+        (message "%s: %s"
+                 (propertize (format "%s" fn-sym)
+                             'face
+                             'font-lock-function-name-face)
+                 (apply #'elisp-get-fnsym-args-string sym-info))))))
+
 ;;;###autoload
 (defun org-extra-back-to-heading ()
   "Move to the heading line of which the present line is a subheading."
   (interactive)
-  (org-up-heading-safe))
+  (if (org-extra-bounds-of-current-block)
+      (condition-case nil
+          (backward-up-list)
+        (error (org-up-heading-safe)))
+    (org-up-heading-safe)))
 
 ;;;###autoload
 (defun org-extra-smart-beginning-of-line ()
