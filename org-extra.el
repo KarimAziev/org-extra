@@ -41,8 +41,9 @@
 ;;; Code:
 
 (require 'org)
-(require 'straight)
+
 (require 'transient)
+
 (defvar org-src-block-faces)
 (defconst org-extra-preview-data-root
   (file-name-directory (if (bound-and-true-p load-file-name) load-file-name
@@ -153,29 +154,23 @@ INHERIT-INPUT-METHOD have the same meaning as for `completing-read'."
                    inherit-input-method))
 
 (defun org-extra-ob-packages ()
-  "Search for files prefixed with `ob-' in straight repos directory.
+	"Search for files prefixed with `ob-' in straight repos directory.
 The returned value is a list of file name bases with trimmed ob-prefix, e.g.
 python for ob-python, julia from ob-julia and so on.
 Result is cached and stored in `org-extra-ob-packages-cached', and invalidated
 by `org-extra-straight-dir-mod-time' - modification time of straight repos
  directory."
-  (let ((mod-time (file-attribute-modification-time
-                   (file-attributes
-                    (straight--repos-dir)))))
-    (unless (equal mod-time
-                   org-extra-straight-dir-mod-time)
-      (setq
-       org-extra-ob-packages-cached
-       (mapcar
-        (lambda (it)
-          (replace-regexp-in-string
-           "^ob-" ""
-           (file-name-base it)))
-        (directory-files-recursively
-         (straight--repos-dir)
-         "^ob-.*el$")))
-      (setq org-extra-straight-dir-mod-time mod-time))
-    org-extra-ob-packages-cached))
+	(let ((langs))
+		(dolist (it features)
+			(let ((name (symbol-name it)))
+				(when (and
+							 (string-prefix-p "ob-"
+																name)
+							 (not (member name '("ob-core" "ob-eval" "ob-table" "ob-tangle")))
+							 (not (string-suffix-p "autoloads" name)))
+					(push (substring-no-properties name 3) langs))))
+		langs)
+	)
 
 (defun org-extra-babel-load-language (lang)
   "Add LANG to `org-babel-load-languages'."
@@ -225,42 +220,600 @@ Usage:
                 (org-extra-babel-load-language lang)))
             (goto-char end-block)))))))
 
-(defcustom org-extra-eldoc-flags-functions '(elisp-eldoc-var-docstring
-                                             org-extra-eldoc-funcall)
+(defcustom org-extra-eldoc-flags-functions	'(org-extra-eldoc-documentation-function)
   "List of additional eldoc functions."
   :group 'org-extra
   :type '(repeat
           (radio
            (function-item elisp-eldoc-var-docstring)
-           (function-item org-extra-eldoc-funcall)
+           (function-item org-extra-eldoc-documentation-function)
            (function :tag "Custom function"))))
-
-(defun org-extra-eldoc-elisp ()
-  "Add elisp documentation in org mode."
-  (dolist (fn org-extra-eldoc-flags-functions)
-    (add-hook 'eldoc-documentation-functions fn nil t)))
 
 ;;;###autoload
 (define-minor-mode org-extra-eldoc-mode
   "Add more eldoc functions when this mode is turned on."
   :lighter " org-eldoc+"
   :global nil
-  (let ((worker (if org-extra-eldoc-mode 'add-hook 'remove-hook)))
-    (dolist (fn org-extra-eldoc-flags-functions)
-      (funcall worker 'eldoc-documentation-functions fn nil t))))
+	(if org-extra-eldoc-mode
+			(dolist (fn org-extra-eldoc-flags-functions)
+				(add-hook 'eldoc-documentation-functions fn nil t))
+		(dolist (fn org-extra-eldoc-flags-functions)
+			(remove-hook 'eldoc-documentation-functions fn t))))
+
+(defcustom org-extra-eldoc-breadcrumb-separator "/"
+  "Breadcrumb separator."
+  :group 'org-eldoc
+  :type 'string)
+
+(defcustom org-extra-eldoc-test-buffer-name " *Org-eldoc test buffer*"
+  "Name of the buffer used while testing for mode-local variable values."
+  :group 'org-eldoc
+  :type 'string)
+
+(defun org-extra-eldoc-get-breadcrumb ()
+  "Return breadcrumb if on a headline or nil."
+  (let ((case-fold-search t) cur)
+    (save-excursion
+      (beginning-of-line)
+      (save-match-data
+        (when (looking-at org-complex-heading-regexp)
+          (setq cur (match-string 4))
+          (org-format-outline-path
+           (append (org-get-outline-path) (list cur))
+           (frame-width) "" org-extra-eldoc-breadcrumb-separator))))))
+
+(defun org-extra-eldoc-get-src-header ()
+	"Return lang and list of header properties if on src definition line."
+	(let ((case-fold-search t) info lang hdr-args)
+    (save-excursion
+      (beginning-of-line)
+      (save-match-data
+        (when (looking-at "^[ \t]*#\\+\\(begin\\|end\\)_src")
+          (setq info (org-babel-get-src-block-info 'light)
+                lang (propertize (or (nth 0 info) "no lang") 'face
+																 'font-lock-string-face)
+                hdr-args (nth 2 info))
+          (concat
+           lang
+           ": "
+           (mapconcat
+            (lambda (elem)
+              (or
+							 (when-let ((val (and (cdr elem)
+																		(format "%s" (cdr elem)))))
+								 (when (not (string-empty-p val))
+									 (concat
+										(propertize (symbol-name (car elem)) 'face 'org-list-dt)
+										" "
+										(propertize val 'face 'org-verbatim)
+										" ")))
+							 ""))
+            hdr-args " ")))))))
+
+(declare-function org-element-type "org")
+(declare-function org-element-property "org")
+
+(defun org-extra-eldoc-get-src-lang ()
+  "Return value of lang for the current block if in block body and nil otherwise."
+  (let ((element (save-match-data (org-element-at-point))))
+    (and (eq (org-element-type element) 'src-block)
+	 (>= (line-beginning-position)
+	     (org-element-property :post-affiliated element))
+	 (<=
+	  (line-end-position)
+	  (org-with-wide-buffer
+	   (goto-char (org-element-property :end element))
+	   (skip-chars-backward " \t\n")
+	   (line-end-position)))
+	 (org-element-property :language element))))
+
+(defvar org-extra-eldoc-local-functions-cache (make-hash-table
+																							 :size 40
+																							 :test 'equal)
+  "Cache of major-mode's `eldoc-documentation-functions'.")
+
+(defun org-extra-eldoc-get-mode-local-documentation-function (lang)
+	"Check if LANG set `eldoc-documentation-function' and return its value."
+	(let ((cached-func (gethash lang org-extra-eldoc-local-functions-cache 'empty))
+        (mode-func (org-src-get-lang-mode lang))
+        doc-func)
+    (if (eq 'empty cached-func)
+        (when (fboundp mode-func)
+					(with-temp-buffer
+						(funcall mode-func)
+						(setq doc-func (if (boundp 'eldoc-documentation-functions)
+															 (let ((doc-funs eldoc-documentation-functions))
+																 (lambda (callback)
+																	 (let
+																			 ((eldoc-documentation-functions doc-funs))
+																		 (run-hook-with-args-until-success
+																			'eldoc-documentation-functions
+																			callback))))
+														 (and eldoc-documentation-function
+																	(symbol-value 'eldoc-documentation-function))))
+						(puthash lang doc-func org-extra-eldoc-local-functions-cache))
+          doc-func)
+      cached-func)))
+
+(declare-function c-eldoc-print-current-symbol-info "c-eldoc" ())
+(declare-function css-eldoc-function "css-eldoc" ())
+(declare-function php-eldoc-function "php-eldoc" ())
+(declare-function go-eldoc--documentation-function "go-eldoc" ())
+
+(defun org-extra-get-word (&optional chars)
+	"Get thing at point matching CHARS.
+Optional argument CHARS is like the inside of a [...] in a regular expression
+except that ] is never special and \ quotes ^, - or \ (but
+ not at the end of a range; quoting is never needed there)"
+	(unless chars (setq chars "_A-Za-z0-9"))
+	(when-let ((bounds (save-excursion
+											 (let* ((a (save-excursion
+																	 (skip-chars-backward chars)
+																	 (point)))
+															(b (save-excursion
+																	 (skip-chars-forward chars)
+																	 (point))))
+												 (if (string-blank-p
+															(buffer-substring-no-properties a b))
+														 nil
+													 (cons a b))))))
+    (buffer-substring-no-properties (car bounds)
+                                    (cdr bounds))))
+(defvar org-extra-eldoc-special-props '(("ALLTAGS" .
+																				 "All tags, including inherited ones.")
+																				("BLOCKED" . "‘t’ if task is currently blocked by children or siblings.")
+																				("CATEGORY" . "The category of an entry.")
+																				("CLOCKSUM" .
+																				 "The sum of CLOCK intervals in the subtree.  ‘org-clock-sum’\n                 must be run first to compute the values in the current buffer.")
+																				("CLOCKSUM_T" .
+																				 "The sum of CLOCK intervals in the subtree for today.\n                 ‘org-clock-sum-today’ must be run first to compute the\n                 values in the current buffer.")
+																				("CLOSED" . "When was this entry closed?")
+																				("DEADLINE" . "The deadline timestamp.")
+																				("FILE" . "The filename the entry is located in.")
+																				("ITEM" . "The headline of the entry.")
+																				("PRIORITY" . "The priority of the entry, a string with a single letter.")
+																				("SCHEDULED" . "The scheduling timestamp.")
+																				("TAGS" . "The tags defined directly in the headline.")
+																				("TIMESTAMP" . "The first keyword-less timestamp in the entry.")
+																				("TIMESTAMP_IA" . "The first inactive timestamp in the entry.")
+																				("TODO" . "The TODO keyword of the entry.")))
+(defvar org-extra-eldoc-short-options
+	'(("'" .
+		 "Toggle smart quotes (‘org-export-with-smart-quotes’).  Depending on\n     the language used, when activated, Org treats pairs of double\n     quotes as primary quotes, pairs of single quotes as secondary\n     quotes, and single quote marks as apostrophes.")
+		("*" . "Toggle emphasized text (‘org-export-with-emphasize’).")
+		("-" .
+		 "Toggle conversion of special strings\n     (‘org-export-with-special-strings’).")
+		(":" . "Toggle fixed-width sections (‘org-export-with-fixed-width’).")
+		("<" .
+		 "Toggle inclusion of time/date active/inactive stamps\n     (‘org-export-with-timestamps’).")
+		("\\n" .
+		 "Toggles whether to preserve line breaks\n     (‘org-export-preserve-breaks’).")
+		("^" .
+		 "Toggle TeX-like syntax for sub- and superscripts.  If you write\n     ‘^:{}’, ‘a_{b}’ is interpreted, but the simple ‘a_b’ is left as it\n     is (‘org-export-with-sub-superscripts’).")
+		("arch" .
+		 "Configure how archived trees are exported.  When set to ‘headline’,\n     the export process skips the contents and processes only the\n     headlines (‘org-export-with-archived-trees’).")
+		("author" .
+		 "Toggle inclusion of author name into exported file\n     (‘org-export-with-author’).")
+		("broken-links" .
+		 "Toggles if Org should continue exporting upon finding a broken\n     internal link.  When set to ‘mark’, Org clearly marks the problem\n     link in the output (‘org-export-with-broken-links’).")
+		("c" . "Toggle inclusion of ‘CLOCK’ keywords (‘org-export-with-clocks’).")
+		("creator" .
+		 "Toggle inclusion of creator information in the exported file\n     (‘org-export-with-creator’).")
+		("d" .
+		 "Toggles inclusion of drawers, or list of drawers to include, or\n     list of drawers to exclude (‘org-export-with-drawers’).")
+		("date" .
+		 "Toggle inclusion of a date into exported file\n     (‘org-export-with-date’).")
+		("e" . "Toggle inclusion of entities (‘org-export-with-entities’).")
+		("email" .
+		 "Toggle inclusion of the author’s e-mail into exported file\n     (‘org-export-with-email’).")
+		("f" . "Toggle the inclusion of footnotes (‘org-export-with-footnotes’).")
+		("H" .
+		 "Set the number of headline levels for export\n     (‘org-export-headline-levels’).  Below that level, headlines are\n     treated differently.  In most back-ends, they become list items.")
+		("inline" .
+		 "Toggle inclusion of inlinetasks (‘org-export-with-inlinetasks’).")
+		("num" .
+		 "Toggle section-numbers (‘org-export-with-section-numbers’).  When\n     set to number N, Org numbers only those headlines at level N or\n     above.  Set ‘UNNUMBERED’ property to non-‘nil’ to disable numbering\n     of heading and subheadings entirely.  Moreover, when the value is\n     ‘notoc’ the headline, and all its children, do not appear in the\n     table of contents either (see *note Table of Contents::).")
+		("p" .
+		 "Toggle export of planning information (‘org-export-with-planning’).\n     “Planning information” comes from lines located right after the\n     headline and contain any combination of these cookies: ‘SCHEDULED’,\n     ‘DEADLINE’, or ‘CLOSED’.")
+		("pri" .
+		 "Toggle inclusion of priority cookies (‘org-export-with-priority’).")
+		("prop" .
+		 "Toggle inclusion of property drawers, or list the properties to\n     include (‘org-export-with-properties’).")
+		("stat" .
+		 "Toggle inclusion of statistics cookies\n     (‘org-export-with-statistics-cookies’).")
+		("tags" .
+		 "Toggle inclusion of tags, may also be ‘not-in-toc’\n     (‘org-export-with-tags’).")
+		("tasks" .
+		 "Toggle inclusion of tasks (TODO items); or ‘nil’ to remove all\n     tasks; or ‘todo’ to remove done tasks; or list the keywords to keep\n     (‘org-export-with-tasks’).")
+		("tex" .
+		 "‘nil’ does not export; ‘t’ exports; ‘verbatim’ keeps everything in\n     verbatim (‘org-export-with-latex’).")
+		("timestamp" .
+		 "Toggle inclusion of the creation time in the exported file\n     (‘org-export-time-stamp-file’).")
+		("title" . "Toggle inclusion of title (‘org-export-with-title’).")
+		("toc" .
+		 "Toggle inclusion of the table of contents, or set the level limit\n     (‘org-export-with-toc’).")
+		("todo" .
+		 "Toggle inclusion of TODO keywords into exported text\n     (‘org-export-with-todo-keywords’).")
+		("|" .
+		 "Toggle inclusion of tables (‘org-export-with-tables’).\n\n   When exporting subtrees, special node properties can override the\nabove keywords.  These properties have an ‘EXPORT_’ prefix.  For\nexample, ‘DATE’ becomes, ‘EXPORT_DATE’ when used for a specific subtree.\nExcept for ‘SETUPFILE’, all other keywords listed above have an")))
+
+(defvar org-extra-eldoc-short-export-setting
+	'(("AUTHOR" . "The document author (‘user-full-name’).")
+		("CREATOR" .
+		 "Entity responsible for output generation\n     (‘org-export-creator-string’).")
+		("DATE" . "A date or a time-stamp(2).")
+		("EMAIL" . "The email address (‘user-mail-address’).")
+		("LANGUAGE" .
+		 "Language to use for translating certain strings\n     (‘org-export-default-language’).  With ‘#+LANGUAGE: fr’, for\n     example, Org translates ‘Table of contents’ to the French ‘Table\n     des matières’(3).")
+		("SELECT_TAGS" .
+		 "The default value is ‘(\"export\")’.  When a tree is tagged with\n     ‘export’ (‘org-export-select-tags’), Org selects that tree and its\n     subtrees for export.  Org excludes trees with ‘noexport’ tags, see\n     below.  When selectively exporting files with ‘export’ tags set,\n     Org does not export any text that appears before the first\n     headline.")
+		("EXCLUDE_TAGS" .
+		 "The default value is ‘(\"noexport\")’.  When a tree is tagged with\n     ‘noexport’ (‘org-export-exclude-tags’), Org excludes that tree and\n     its subtrees from export.  Entries tagged with ‘noexport’ are\n     unconditionally excluded from the export, even if they have an\n     ‘export’ tag.  Even if a subtree is not exported, Org executes any\n     code blocks contained there.")
+		("TITLE" .
+		 "Org displays this title.  For long titles, use multiple ‘#+TITLE’ lines.")
+		("EXPORT_FILE_NAME" .
+		 "The name of the output file to be generated.  Otherwise, Org\n     generates the file name based on the buffer name and the extension\n     based on the back-end format.\n\n   The ‘OPTIONS’ keyword is a compact form.  To configure multiple\noptions, use several ‘OPTIONS’ lines.  ‘OPTIONS’ recognizes the\nfollowing arguments.")
+		("ARCHIVE" . "Sets the archive location of the agenda file")
+		("CONSTANTS" .
+		 "Set file-local values for constants that table formulas can use")
+		("FILETAGS" . "#+FILETAGS: :tag1:tag2:tag3:")
+		("LINK"
+		 .
+		 "#+LINK: linkword replace Each line specifies one abbreviation for one link")
+		("PROPERTY" . "#+PROPERTY: Property_Name Value")
+		("ALLTAGS" .
+		 "All tags, including inherited ones.")
+		("BLOCKED" .
+		 "‘t’ if task is currently blocked by children or siblings.")
+		("CATEGORY" .
+		 "The category of an entry.")
+		("CLOCKSUM" .
+		 "The sum of CLOCK intervals in the subtree.  ‘org-clock-sum’\n                 must be run first to compute the values in the current buffer.")
+		("CLOCKSUM_T" .
+		 "The sum of CLOCK intervals in the subtree for today.\n                 ‘org-clock-sum-today’ must be run first to compute the\n                 values in the current buffer.")
+		("CLOSED" .
+		 "When was this entry closed?")
+		("DEADLINE" . "The deadline timestamp.")
+		("FILE" .
+		 "The filename the entry is located in.")
+		("ITEM" . "The headline of the entry.")
+		("PRIORITY" .
+		 "The priority of the entry, a string with a single letter.")
+		("SCHEDULED" .
+		 "The scheduling timestamp.")
+		("TAGS" .
+		 "The tags defined directly in the headline. (‘org-tag-alist’)")
+		("TIMESTAMP" .
+		 "The first keyword-less timestamp in the entry.")
+		("TIMESTAMP_IA" .
+		 "The first inactive timestamp in the entry.")
+		("TODO" .
+		 "The TODO keyword of the entry.")
+		("DESCRIPTION" .
+		 "This is the document’s description, which the HTML exporter inserts\n     it as a HTML meta tag in the HTML file.  For long descriptions, use\n     multiple ‘DESCRIPTION’ lines.  The exporter takes care of wrapping\n     the lines properly.\n\n     The exporter includes a number of other meta tags, which can be\n     customized by modifying ‘org-html-meta-tags’.")
+		("HTML_DOCTYPE" .
+		 "Specify the document type, for example: HTML5 (‘org-html-doctype’).")
+		("HTML_CONTAINER" .
+		 "Specify the HTML container, such as ‘div’, for wrapping sections\n     and elements (‘org-html-container-element’).")
+		("HTML_LINK_HOME" . "The URL for home link (‘org-html-link-home’).")
+		("HTML_LINK_UP" .
+		 "The URL for the up link of exported HTML pages\n     (‘org-html-link-up’).")
+		("HTML_MATHJAX" .
+		 "Options for MathJax (‘org-html-mathjax-options’).  MathJax is used\n     to typeset LaTeX math in HTML documents.  See *note Math formatting\n     in HTML export::, for an example.")
+		("HTML_HEAD" .
+		 "Arbitrary lines for appending to the HTML document’s head\n     (‘org-html-head’).")
+		("HTML_HEAD_EXTRA" .
+		 "More arbitrary lines for appending to the HTML document’s head\n     (‘org-html-head-extra’).")
+		("KEYWORDS" .
+		 "Keywords to describe the document’s content.  HTML exporter inserts\n     these keywords as HTML meta tags.  For long keywords, use multiple\n     ‘KEYWORDS’ lines.")
+		("LATEX_HEADER" .
+		 "Arbitrary lines for appending to the preamble; HTML exporter\n     appends when transcoding LaTeX fragments to images (see *note Math\n     formatting in HTML export::).")
+		("SUBTITLE" . "The document’s subtitle.  HTML exporter formats subtitle if
+     document type is ‘HTML5’ and the CSS has a ‘subtitle’ class.")))
+
+(defun org-extra-describe-eldoc-setting ()
+	"Return description for current option in #+options."
+	(when-let* ((option
+							 (when-let ((w (car (split-string
+																	 (buffer-substring-no-properties
+																		(line-beginning-position)
+																		(line-end-position))
+																	 nil t))))
+								 (upcase w)))
+							(descr
+							 (or
+								(when (string-prefix-p "#+" option)
+									(save-excursion
+										(skip-chars-backward "^\s\t\n")
+										(let* ((beg (point))
+													 (end (skip-chars-forward "^\s\t\n:")))
+											(cdr (assoc-string (buffer-substring-no-properties
+																					beg (+ end beg))
+																				 org-extra-eldoc-short-options)))))
+								(let ((alist org-extra-eldoc-short-export-setting))
+									(or
+									 (cdr (assoc-string (org-extra-get-word)
+																			alist))
+									 (let ((str option))
+										 (when (string-prefix-p "#+" str)
+											 (setq str (substring-no-properties str 2)))
+										 (when (string-prefix-p ":" str)
+											 (setq str (substring-no-properties str 1)))
+										 (when (string-suffix-p ":" str)
+											 (setq str (substring-no-properties str 0
+																													(1- (length str)))))
+										 (cdr (assoc-string str
+																				alist))))))))
+	  (concat (propertize option 'face 'font-lock-keyword-face) ": "
+						(org-extra-substitute-get-vars
+						 descr))))
 
 
-(defun org-extra-eldoc-funcall (_callback &rest _ignored)
-  "Fix Symbol’s value as variable is void: elisp-eldoc-funcallorg-mode'."
-  (when (org-extra-bounds-of-current-block)
-    (let* ((sym-info (elisp--fnsym-in-current-sexp))
-           (fn-sym (car sym-info)))
-      (when (fboundp fn-sym)
-        (message "%s: %s"
-                 (propertize (format "%s" fn-sym)
-                             'face
-                             'font-lock-function-name-face)
-                 (apply #'elisp-get-fnsym-args-string sym-info))))))
+(defun org-extra-eldoc-next-variable ()
+	"Substitute STR with variable values in BUFF."
+	(when (re-search-forward "[‘]\\([^’]+\\)[’]"
+													 nil
+													 t 1)
+		(let* ((str (match-string-no-properties 1))
+					 (sym (intern str)))
+			(when (boundp sym)
+				sym))))
+
+
+
+
+ 
+(defun org-extra-eldoc-extract-settings (info-str)
+	"Extract alist of settings from manual INFO-STR."
+	(let ((regex "^[‘]\\([^’]+\\)[’]")
+				(result))
+		(with-temp-buffer
+			(save-excursion
+				(insert info-str))
+			(while (re-search-forward regex nil t 1)
+				(let ((curr (match-string-no-properties 1))
+							(start (point))
+							(end))
+					(setq end (or (save-excursion
+													(when (re-search-forward regex nil t 1)
+														(match-beginning 0)))
+												(line-end-position)))
+					(push (cons curr
+											(string-trim
+											 (buffer-substring-no-properties start end)))
+								result))))
+		(nreverse result)))
+
+(defun org-extra-substitute-get-vars (str)
+	"Substitute STR with variable values in BUFF."
+	(let ((buff (current-buffer)))
+		(with-temp-buffer
+			(save-excursion
+				(insert str))
+			(while (re-search-forward "[~‘]\\([^’~]+\\)[’~]"
+																nil
+																t 1)
+				(let ((str (match-string-no-properties 1))
+							(beg (match-beginning 0))
+							(end (match-end 0)))
+					(let ((sym (intern str)))
+						(when (boundp sym)
+							(forward-char -1)
+							(add-text-properties beg end '(face font-lock-property-name-face))
+							(insert ": " (propertize (format "%s"
+																							 (buffer-local-value sym buff))
+																			 'face
+																			 'font-lock-property-name-face))))))
+			(buffer-string))))
+
+(defun org-extra-eldoc-info ()
+	"Show extra info."
+	(or (org-extra-describe-eldoc-setting)
+			(when-let* ((el (org-element-at-point))
+									(type (org-element-type el)))
+				(if (eq type 'table-row)
+						(org-table-field-info nil)
+					(let ((pl (car-safe (cdr-safe el))))
+						(let ((word (org-extra-get-word))
+									(key (plist-get pl :key)))
+							(pcase key
+								("STARTUP"
+								 (org-extra-substitute-get-vars
+									(pcase word
+										("overview" "Top-level headlines only.")
+										("content" "All headlines.")
+										("showall" "No folding on any entry.")
+										("show2levels" "Headline levels 1-2.")
+										("show3levels" "Headline levels 1-3.")
+										("show4levels" "Headline levels 1-4.")
+										("show5levels" "Headline levels 1-5.")
+										("showeverything" "Show even drawer contents.")
+										("indent" "Start with Org Indent mode turned on.")
+										("noindent" "Start with Org Indent mode turned off.")
+										("num"
+										 "~org-startup-numerated~ Start with Org num mode turned on.")
+										("nonum"
+										 "~org-startup-numerated~ Start with Org num mode turned off.")
+										("align" "~org-startup-align-all-tables~ Align all tables.")
+										("noalign"
+										 "~org-startup-align-all-tables~ Do not align tables on startup.")
+										("inlineimages"
+										 "~org-startup-with-inline-images~ Show inline images.")
+										("noinlineimages"
+										 "~org-startup-with-inline-images~ Do not show inline images on startup.")
+										("logdone"
+										 "~org-log-done~ Record a timestamp when an item is marked as done.")
+										("lognotedone" "Record timestamp and a note when DONE.")
+										("nologdone" "Do not record when items are marked as done.")
+										("logrepeat"
+										 "~org-log-repeat~ Record a time when reinstating a repeating item.")
+										("lognoterepeat"
+										 "Record a note when reinstating a repeating item.")
+										("nologrepeat"
+										 "Do not record when reinstating repeating item.")
+										("lognoteclock-out"
+										 "~org-log-note-clock-out~ Record a note when clocking out.")
+										("nolognoteclock-out"
+										 "Do not record a note when clocking out.")
+										("logreschedule"
+										 "Record a timestamp when scheduling time changes.")
+										("lognotereschedule"
+										 "Record a note when scheduling time changes.")
+										("nologreschedule"
+										 "Do not record when a scheduling date changes.")
+										("logredeadline" "Record a timestamp when deadline changes.")
+										("lognoteredeadline" "Record a note when deadline changes.")
+										("nologredeadline"
+										 "Do not record when a deadline date changes.")
+										("logrefile" "Record a timestamp when refiling.")
+										("lognoterefile" "Record a note when refiling.")
+										("nologrefile" "Do not record when refiling.")
+										("hidestars"
+										 "~org-hide-leading-stars~ Make all but one of the stars starting a headline invisible.")
+										("showstars" "Show all stars starting a headline.")
+										("odd"
+										 "~org-odd-levels-only~ Allow only odd outline levels (1, 3, …).")
+										("oddeven" "Allow all outline levels.")
+										("customtime"
+										 "~org-put-time-stamp-overlays~ ~org-time-stamp-overlay-formats~ Overlay custom time format.")
+										("constcgs"
+										 "‘constants.el’ should use the c-g-s unit system.")
+										("constSI" "‘constants.el’ should use the SI unit system.")
+										("fninline"
+										 "~org-footnote-define-inline~ Define footnotes inline.")
+										("fnnoinline" "Define footnotes in separate section.")
+										("fnlocal"
+										 "Define footnotes near first reference, but not inline.")
+										("fnprompt" "Prompt for footnote labels.")
+										("fnauto"
+										 "Create ‘[fn:1]’-like labels automatically (default).")
+										("fnconfirm"
+										 "Offer automatic label for editing or confirmation.")
+										("fnadjust" "Automatically renumber and sort footnotes.")
+										("nofnadjust" "Do not renumber and sort automatically.")
+										("hideblocks" "Hide all begin/end blocks on startup.")
+										("nohideblocks" "Do not hide blocks on startup.")
+										("entitiespretty"
+										 "Show entities as UTF-8 characters where possible.")
+										("entitiesplain" "Leave entities plain.")
+										(_ "Startup options Org uses when first visiting a file"))))
+								("OPTIONS"
+								 (or (org-extra-describe-eldoc-setting)
+										 "Compact form of export options"))
+								("INFOJS_OPT"
+								 (pcase word
+									 ("view" "Initial view")
+									 ("sdepth"
+										"Maximum headline level as an independent section for info and folding modes")
+									 ("toc" "show table of contents")
+									 ("tdepth"
+										"depth of the table of contents ~org-export-headline-levels~")
+									 ("ftoc" "display toc as a fixed section")
+									 ("ltoc" "short contents in each section")
+									 ("mouse" "Higlhight color for headings on mouse over")
+									 ("buttons" "should view-toggle buttons be everywhere")
+									 ("path" "The path to the script")
+									 (_ "Options for org-info.js")))
+								(_
+								 (or
+									(when-let ((descr
+															(cdr
+															 (assoc-string word
+																						 (append
+																							org-extra-eldoc-short-export-setting
+																							org-extra-eldoc-special-props)))))
+										(concat
+										 (propertize (format "%s: (%s): " key type) 'face
+																 'font-lock-keyword-face)
+										 (org-extra-substitute-get-vars descr)))
+									(format "%s" type))))))))))
+
+(defun org-extra-eldoc-documentation-function (&rest args)
+	"Return breadcrumbs on a headline, ARGS for src block header-line.
+Call other documentation functions depending on lang when inside src body."
+	(let ((res (or
+							(org-extra-eldoc-get-breadcrumb)
+							(org-extra-eldoc-get-src-header)
+							(when-let ((lang (org-extra-eldoc-get-src-lang)))
+								(cond ((string= lang "org")	;Prevent inf-loop for Org src blocks
+											 nil)
+											((or
+												(string= lang "emacs-lisp")
+												(string= lang "elisp"))
+											 (apply #'org-extra-eldoc-funcall args))
+											((or
+												(string= lang "c")
+												;; https://github.com/nflath/c-eldoc
+												(string= lang "C"))
+											 (when
+													 (require 'c-eldoc nil t)
+												 (c-eldoc-print-current-symbol-info)))
+											;; https://github.com/zenozeng/css-eldoc
+											((string= lang "css")
+											 (when
+													 (require 'css-eldoc nil t)
+												 (css-eldoc-function)))
+											;; https://github.com/zenozeng/php-eldoc
+											((string= lang "php")
+											 (when
+													 (require 'php-eldoc nil t)
+												 (php-eldoc-function)))
+											((or
+												(string= lang "go")
+												(string= lang "golang"))
+											 (when
+													 (require 'go-eldoc nil t)
+												 (go-eldoc--documentation-function)))
+											(t
+											 (let ((doc-fun (org-extra-eldoc-get-mode-local-documentation-function
+																			 lang))
+														 (callback (car args)))
+												 (when (functionp doc-fun)
+													 (if (functionp callback)
+															 (funcall doc-fun callback)
+														 (funcall doc-fun)))))))
+							(org-extra-eldoc-info))))
+		res))
+
+
+(defun org-extra-src-block-params-inner ()
+	"If point is inside body of src block return list - (LANGUAGE BEGINNING END)."
+	(save-excursion
+    (save-restriction
+      (widen)
+      (let ((case-fold-search t))
+        (unless (save-excursion
+                  (beginning-of-line)
+                  (re-search-forward
+									 "#\\+\\(begin\\)_src\\($\\|[\s\f\t\n\r\v]\\)"
+                   (line-end-position)
+                   t 1))
+          (when (re-search-forward
+								 "#\\+\\(begin\\|end\\)_src\\($\\|[\s\f\t\n\r\v]\\)" nil t 1)
+            (when-let ((word (match-string-no-properties 1))
+                       (end (match-beginning 0)))
+              (setq word (downcase word))
+              (when (string= word "end")
+                (when (re-search-backward
+											 "^\\([ \t]*\\)#\\+begin_src[ \t]+\\([^ \f\t\n\r\v]+\\)[ \t]*"
+											 nil t 1)
+                  (let ((lang (match-string-no-properties 2)))
+                    (forward-line 1)
+                    (list lang (point) end)))))))))))
+
+(defun org-extra-eldoc-funcall (callback &rest _ignored)
+	"Document function call at point by calling CALLBACK."
+	(when (org-extra-src-block-params-inner)
+    (when-let* ((sym-info (elisp--fnsym-in-current-sexp))
+								(fn-sym (car sym-info))
+								(info
+								 (when (fboundp fn-sym)
+									 (apply #'elisp-get-fnsym-args-string sym-info))))
+      (funcall callback info
+							 :thing fn-sym
+							 :face (if (functionp fn-sym)
+												 'font-lock-function-name-face
+											 'font-lock-keyword-face)))))
 
 ;;;###autoload
 (defun org-extra-back-to-heading ()
@@ -438,6 +991,20 @@ This function use library `language-detection'."
                                     nil detected-lang)))
 
 ;;;###autoload
+(defun org-extra-example-blocks-to-org-src (language)
+  "Convert example blocks in buffer to begin/end_SUFFIX blocks with LANGUAGE.
+If LANGUAGE is omitted, read it with completions."
+  (interactive (list
+                (org-extra-read-babel-languages "Language: " nil nil
+                                                nil
+                                                nil)))
+  (org-with-wide-buffer
+   (widen)
+   (goto-char (point-max))
+   (while (re-search-backward "#\\+\\(begin\\)_example" nil t 1)
+     (org-extra-example-block-to-src language "src"))))
+
+;;;###autoload
 (defun org-extra-example-block-to-src (&optional language suffix)
   "Convert example block at point to begin/end_SUFFIX with LANGUAGE.
 If LANGUAGE is omitted, read it with completions."
@@ -480,13 +1047,16 @@ If LANGUAGE is omitted, read it with completions."
                                     (line-beginning-position))
                                   rep-end)))
         (setq suffix
-              (or suffix (org-extra-call-with-overlays
-                          alist-bounds
-                          (lambda ()
-                            (completing-read
-                             "Replace with"
-                             (mapcar #'cdr
-                                     org-structure-template-alist))))))
+              (or suffix
+                  (if language
+                      "src"
+                    (org-extra-call-with-overlays
+                     alist-bounds
+                     (lambda ()
+                       (completing-read
+                        "Replace with"
+                        (mapcar #'cdr
+                                org-structure-template-alist)))))))
         (pcase suffix
           ("src" (setq suffix (concat
                                suffix " "
@@ -813,6 +1383,7 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
          (org-before-first-heading-p)))))
    ("o" "Column view of properties (C-c C-x C-c)" org-columns)
    ("i" "Insert Column View DBlock" org-columns-insert-dblock)])
+
 ;;;###autoload (autoload 'org-extra-todo-lists-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-todo-lists-menu ()
   "Transient menu for TODO Lists commands."
