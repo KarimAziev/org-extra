@@ -6,7 +6,8 @@
 ;; URL: https://github.com/KarimAziev/org-extra
 ;; Keywords: outlines
 ;; Version: 0.1.1
-;; Package-Requires: ((emacs "28.1") (org "9.6") (transient "0.3.7.50"))
+;; Package-Requires: ((emacs "28.1") (org "9.6.3") (transient "0.4.1"))
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -1207,6 +1208,7 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
    ("j" "Send bug report" org-submit-bug-report)
    ("k" "Refresh/Reload" org-extra-refresh-reload-menu)])
 
+;;;###autoload
 (defun org-extra-reload ()
   "Reload Org uncompiled."
   (interactive)
@@ -1282,11 +1284,13 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
                   (car org-done-keywords)
                   (if org-log-done "automatically" "not"))))
 
+;;;###autoload
 (defun org-extra-clock-in ()
   "Offer a list of \ recently clocked tasks to clock into."
   (interactive)
   (org-clock-in '(4)))
 
+;;;###autoload
 (defun org-extra-clock-in-mark ()
   "Clock into the current task and mark it as the default task.
 A special task that will always be offered in the
@@ -1396,11 +1400,13 @@ clocking selection, associated with the letter `d'."
    ("o" "Column view of properties (C-c C-x C-c)" org-columns)
    ("i" "Insert Column View DBlock" org-columns-insert-dblock)])
 
+;;;###autoload
 (defun org-extra-customize-org-enforce-todo-dependencies ()
   "Customize `org-enforce-todo-dependencies'."
   (interactive)
   (customize-variable 'org-enforce-todo-dependencies))
 
+;;;###autoload
 (defun org-extra-customize-feed ()
   "Customize `org-feed-alist'."
   (interactive)
@@ -1566,6 +1572,7 @@ clocking selection, associated with the letter `d'."
       (ignore-errors
         (org-in-subtree-not-table-p))))])
 
+;;;###autoload
 (defun org-extra-footnote ()
   "Offer special org footnote actions."
   (interactive)
@@ -1673,6 +1680,7 @@ clocking selection, associated with the letter `d'."
    ("h" "Show All" org-fold-show-all)
    ("u" "Subtree to indirect buffer (C-c C-x b)" org-tree-to-indirect-buffer)])
 
+;;;###autoload
 (defun org-extra-babel-menu ()
   "Remove remove all result blocks in the buffer."
   (interactive)
@@ -1718,6 +1726,7 @@ clocking selection, associated with the letter `d'."
     ("f" "tangle file" org-babel-tangle-file)
     ("t" "tangle" org-babel-tangle)]])
 
+;;;###autoload
 (defun org-extra-table-insert-row-below ()
   "Insert a new row below the current line into the table."
   (interactive)
@@ -1772,11 +1781,13 @@ clocking selection, associated with the letter `d'."
                                 (read-number "Columns: " 2)
                                 (read-number "Rows: " 4))))))
 
+;;;###autoload
 (defun org-extra-info-timers ()
   "Read documentation for Org Timers in the info system."
   (interactive)
   (org-info "Timers"))
 
+;;;###autoload
 (defun org-extra-info-clock-commands ()
   "Read documentation for Org Clocking commands in the info system."
   (interactive)
@@ -1811,6 +1822,7 @@ clocking selection, associated with the letter `d'."
     ("h" "Schedule" org-schedule)]])
 
 
+;;;###autoload
 (defun org-extra-agenda-archives-files ()
   "Toggle inclusion of files in trees marked with :ARCHIVE:."
   (interactive)
@@ -1818,6 +1830,7 @@ clocking selection, associated with the letter `d'."
   (when (fboundp 'org-agenda-archives-mode)
     (org-agenda-archives-mode 'files)))
 
+;;;###autoload (autoload 'org-extra-agenda-transient "org-extra.el" nil t)
 (transient-define-prefix org-extra-agenda-transient ()
   "Command dispatcher for agenda mode."
   [["Headline"
@@ -1871,6 +1884,32 @@ clocking selection, associated with the letter `d'."
     ("g d" "Jump to date" org-agenda-goto-date)
     ("." "Go to today" org-agenda-goto-today)
     ("g r" "Rebuild views " org-agenda-redo)]])
+
+;;;###autoload (autoload 'org-extra-toggle-menu "org-extra.el" nil t)
+(transient-define-prefix org-extra-toggle-menu ()
+  "Command dispatcher with org toggle commands."
+  [["Toggle visibility"
+    ("i" "Images" org-toggle-inline-images)
+    ("b" "Block" org-hide-block-toggle)
+    ("d" "Drawer" org-hide-drawer-toggle)
+    ("C" "Custom properties" org-toggle-custom-properties-visibility)
+    ("l" "Links" org-toggle-link-display)
+    ("E" "Entities" org-toggle-pretty-entities)]
+   ["Toggle buttons"
+    ("c" "Comment" org-toggle-comment)
+    ("x" "Checkbox" org-toggle-checkbox)
+    ("r" "Radio" org-toggle-radio-button)
+    ("a" "Archive tag" org-toggle-archive-tag)]]
+  ["Toggle headings"
+   ("H" "Headings => normal lines => list"
+    org-toggle-item)
+   ("h" "Headings => normal text" org-toggle-heading)]
+  [("w" "Fixed-width markup" org-toggle-fixed-width)
+   ("g" "Group tags" org-toggle-tags-groups)
+   ("t" "Timestamp" org-toggle-timestamp-type)
+   ("e" "Custom time stamp formats" org-toggle-time-stamp-overlays)
+   ("u" "Debugging flags for ‘org-gcal’" org-gcal-toggle-debug)])
+
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
