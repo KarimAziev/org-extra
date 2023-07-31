@@ -1888,6 +1888,7 @@ clocking selection, associated with the letter `d'."
 ;;;###autoload (autoload 'org-extra-toggle-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-toggle-menu ()
   "Command dispatcher with org toggle commands."
+  :transient-suffix #'transient--do-call
   [["Toggle visibility"
     ("i" "Images" org-toggle-inline-images)
     ("b" "Block" org-hide-block-toggle)
