@@ -37,15 +37,15 @@
 ;;      Move to the heading line of which the present line is a subheading.
 
 ;; Advice functions
-     ;; `org-extra-src-fontify-advice'
-     ;; `org-extra-babel-before-execute-src-block'
+;; `org-extra-src-fontify-advice'
+;; `org-extra-babel-before-execute-src-block'
 ;;; Code:
 
 (require 'org)
-
 (require 'transient)
 
 (defvar org-src-block-faces)
+
 (defconst org-extra-preview-data-root
   (file-name-directory (if (bound-and-true-p load-file-name) load-file-name
                          (buffer-file-name)))
@@ -60,7 +60,7 @@
   :group 'org)
 
 (defcustom org-extra-languages-alist '((c . "C")
-                                       (emacslisp . "emacs-lisp")
+                                       (emacslisp . "elisp")
                                        (javascript . "js"))
   "Alist of languages from `language-detection.el' and org babel languages."
   :group 'org-babel
@@ -126,6 +126,7 @@
 
 (defvar org-src-lang-modes)
 (defvar org-babel-load-languages)
+
 (defun org-extra-babel-default-loadable-languages ()
   "Return list of options from variable `org-babel-load-languages'."
   (mapcar (lambda (it)
@@ -135,43 +136,80 @@
                                 'custom-type))
                           :key-type))))
 
+(defun org-extra-ob-packages ()
+  "List all `org-babel' languages in `features' excluding core and autoloads."
+  (let ((langs))
+    (dolist (it features)
+      (let ((name (symbol-name it)))
+        (when (and
+               (string-prefix-p "ob-" name)
+               (not (member name '("ob-core" "ob-eval" "ob-table" "ob-tangle"
+                                   "ob-comint"
+                                   "ob-exp"
+                                   "ob-lob"
+                                   "ob-ref")))
+               (not (string-suffix-p "autoloads" name)))
+          (push (substring-no-properties name 3) langs))))
+    langs))
+
+(defun org-extra-get-all-external-babel-languages ()
+  "Retrieve all external Babel languages supported by Org mode."
+  (let* ((suffixes (find-library-suffixes))
+         (regexp (concat (regexp-opt suffixes) "\\'"))
+         (dirs (seq-remove
+                (apply-partially #'string-suffix-p "org")
+                load-path))
+         (files nil))
+    (dolist (dir dirs)
+      (dolist (file (ignore-errors (directory-files dir nil regexp t)))
+        (when (string-match regexp file)
+          (let ((name (substring file 0 (match-beginning 0))))
+            (when (and (string-prefix-p "ob-" name)
+                       (not
+                        (or (string-suffix-p "-autoloads" name)
+                            (string-suffix-p "-mode" name))))
+              (push (substring name 3) files))))))
+    files))
+
+(defun org-extra-get-all-babel-languages ()
+  "Retrieve all languages supported by Babel in Org mode."
+  (delete-dups
+   (mapcar (apply-partially #'format "%s")
+           (append
+            (mapcar #'car org-babel-load-languages)
+            (mapcar #'car org-src-lang-modes)
+            (mapcar (pcase-lambda (`(,_t ,_k ,_label ,sym)) sym)
+                    (cdadr (memq :key-type
+                                 (get
+                                  'org-babel-load-languages
+                                  'custom-type))))
+            (org-extra-get-all-external-babel-languages)
+            (org-extra-ob-packages)))))
+
+(defun org-extra-babel-load-all-languages ()
+  "Load all Babel languages using the `org-extra-babel-load-language' function."
+  (dolist (lang-str (org-extra-get-all-babel-languages))
+    (org-extra-babel-load-language lang-str)))
+
 (defun org-extra-read-babel-languages (prompt &optional predicate require-match
                                               initial-input hist def
                                               inherit-input-method)
   "Read org babel language with PROMPT.
 Optional arguments PREDICATE, REQUIRE-MATCH, INITIAL-INPUT, HIST, DEF and
 INHERIT-INPUT-METHOD have the same meaning as for `completing-read'."
-  (completing-read prompt (delete-dups
-                           (append
-                            (mapcar #'car org-babel-load-languages)
-                            (mapcar (lambda (it)
-                                      (car (reverse it)))
-                                    (cdr (nth 1
-                                              (memq :key-type
-                                                    (get
-                                                     'org-babel-load-languages
-                                                     'custom-type)))))))
-                   predicate require-match
-                   initial-input hist def
-                   inherit-input-method))
-
-(defun org-extra-ob-packages ()
-  "Search for files prefixed with `ob-' in straight repos directory.
-The returned value is a list of file name bases with trimmed ob-prefix, e.g.
-python for ob-python, julia from ob-julia and so on.
-Result is cached and stored in `org-extra-ob-packages-cached', and invalidated
-by `org-extra-straight-dir-mod-time' - modification time of straight repos
- directory."
-  (let ((langs))
-    (dolist (it features)
-      (let ((name (symbol-name it)))
-        (when (and
-               (string-prefix-p "ob-"
-                                name)
-               (not (member name '("ob-core" "ob-eval" "ob-table" "ob-tangle")))
-               (not (string-suffix-p "autoloads" name)))
-          (push (substring-no-properties name 3) langs))))
-    langs))
+  (let* ((langs (org-extra-get-all-babel-languages))
+         (annotf (lambda (str)
+                   (format " (%s)"
+                           (org-src-get-lang-mode str)))))
+    (completing-read prompt
+                     (lambda (str pred action)
+                       (if (eq action 'metadata)
+                           `(metadata
+                             (annotation-function . ,annotf))
+                         (complete-with-action action langs str pred)))
+                     predicate require-match
+                     initial-input hist def
+                     inherit-input-method)))
 
 (defun org-extra-babel-load-language (lang)
   "Add LANG to `org-babel-load-languages'."
@@ -191,18 +229,18 @@ by `org-extra-straight-dir-mod-time' - modification time of straight repos
                               cands))
         (when found
           (add-to-list 'org-babel-load-languages `(,found . t))
-          (set-default 'org-babel-load-languages org-babel-load-languages)
           (require (intern (concat "ob-" (symbol-name found)))))))))
 
-(defun org-extra-babel-before-execute-src-block (&optional _arg info _params)
-  "Advice function for `org-babel-execute-src-block' to load language from INFO.
+(defun org-extra-babel-before-execute-src-block (&rest args)
+  "Advice function for `org-babel-execute-src-block' to load language from ARGS.
 
 Usage:
 
 
 \\=(advice-add \\='org-babel-execute-src-block
               :before #\\='org-extra-babel-before-execute-src-block)."
-  (org-extra-babel-load-language (nth 0 info)))
+  (pcase-let ((`(,_arg ,info . ,_params) args))
+    (org-extra-babel-load-language (nth 0 info))))
 
 (defun org-extra-load-languages-in-buffer ()
   "Try to load all src-block languages in current buffer."
@@ -221,7 +259,7 @@ Usage:
                 (org-extra-babel-load-language lang)))
             (goto-char end-block)))))))
 
-(defcustom org-extra-eldoc-flags-functions	'(org-extra-eldoc-documentation-function)
+(defcustom org-extra-eldoc-flags-functions '(org-extra-eldoc-documentation-function)
   "List of additional eldoc functions."
   :group 'org-extra
   :type '(repeat
@@ -260,7 +298,8 @@ Usage:
         (when (looking-at org-complex-heading-regexp)
           (setq cur (match-string 4))
           (org-format-outline-path
-           (append (org-get-outline-path) (list cur))
+           (append (org-get-outline-path)
+                   (list cur))
            (frame-width) "" org-extra-eldoc-breadcrumb-separator))))))
 
 (defun org-extra-eldoc-get-src-header ()
@@ -296,17 +335,18 @@ Usage:
 
 (defun org-extra-eldoc-get-src-lang ()
   "Return value of lang for the current block if in block body and nil otherwise."
-  (let ((element (save-match-data (org-element-at-point))))
+  (let ((element (save-match-data
+                   (org-element-at-point))))
     (and (eq (org-element-type element) 'src-block)
-   (>= (line-beginning-position)
-       (org-element-property :post-affiliated element))
-   (<=
-    (line-end-position)
-    (org-with-wide-buffer
-     (goto-char (org-element-property :end element))
-     (skip-chars-backward " \t\n")
-     (line-end-position)))
-   (org-element-property :language element))))
+         (>= (line-beginning-position)
+             (org-element-property :post-affiliated element))
+         (<=
+          (line-end-position)
+          (org-with-wide-buffer
+           (goto-char (org-element-property :end element))
+           (skip-chars-backward " \t\n")
+           (line-end-position)))
+         (org-element-property :language element))))
 
 (defvar org-extra-eldoc-local-functions-cache (make-hash-table
                                                :size 40
@@ -360,14 +400,12 @@ except that ] is never special and \ quotes ^, - or \ (but
                            (cons a b))))))
     (buffer-substring-no-properties (car bounds)
                                     (cdr bounds))))
-(defvar org-extra-eldoc-special-props '(("ALLTAGS" .
-                                         "All tags, including inherited ones.")
+
+(defvar org-extra-eldoc-special-props '(("ALLTAGS" . "All tags, including inherited ones.")
                                         ("BLOCKED" . "‘t’ if task is currently blocked by children or siblings.")
                                         ("CATEGORY" . "The category of an entry.")
-                                        ("CLOCKSUM" .
-                                         "The sum of CLOCK intervals in the subtree.  ‘org-clock-sum’\n                 must be run first to compute the values in the current buffer.")
-                                        ("CLOCKSUM_T" .
-                                         "The sum of CLOCK intervals in the subtree for today.\n                 ‘org-clock-sum-today’ must be run first to compute the\n                 values in the current buffer.")
+                                        ("CLOCKSUM" . "The sum of CLOCK intervals in the subtree.  ‘org-clock-sum’\n                 must be run first to compute the values in the current buffer.")
+                                        ("CLOCKSUM_T" . "The sum of CLOCK intervals in the subtree for today.\n                 ‘org-clock-sum-today’ must be run first to compute the\n                 values in the current buffer.")
                                         ("CLOSED" . "When was this entry closed?")
                                         ("DEADLINE" . "The deadline timestamp.")
                                         ("FILE" . "The filename the entry is located in.")
@@ -378,137 +416,81 @@ except that ] is never special and \ quotes ^, - or \ (but
                                         ("TIMESTAMP" . "The first keyword-less timestamp in the entry.")
                                         ("TIMESTAMP_IA" . "The first inactive timestamp in the entry.")
                                         ("TODO" . "The TODO keyword of the entry.")))
+
 (defvar org-extra-eldoc-short-options
-  '(("'" .
-     "Toggle smart quotes (‘org-export-with-smart-quotes’).  Depending on\n     the language used, when activated, Org treats pairs of double\n     quotes as primary quotes, pairs of single quotes as secondary\n     quotes, and single quote marks as apostrophes.")
+  '(("'" . "Toggle smart quotes (‘org-export-with-smart-quotes’).  Depending on\n     the language used, when activated, Org treats pairs of double\n     quotes as primary quotes, pairs of single quotes as secondary\n     quotes, and single quote marks as apostrophes.")
     ("*" . "Toggle emphasized text (‘org-export-with-emphasize’).")
-    ("-" .
-     "Toggle conversion of special strings\n     (‘org-export-with-special-strings’).")
+    ("-" . "Toggle conversion of special strings\n     (‘org-export-with-special-strings’).")
     (":" . "Toggle fixed-width sections (‘org-export-with-fixed-width’).")
-    ("<" .
-     "Toggle inclusion of time/date active/inactive stamps\n     (‘org-export-with-timestamps’).")
-    ("\\n" .
-     "Toggles whether to preserve line breaks\n     (‘org-export-preserve-breaks’).")
-    ("^" .
-     "Toggle TeX-like syntax for sub- and superscripts.  If you write\n     ‘^:{}’, ‘a_{b}’ is interpreted, but the simple ‘a_b’ is left as it\n     is (‘org-export-with-sub-superscripts’).")
-    ("arch" .
-     "Configure how archived trees are exported.  When set to ‘headline’,\n     the export process skips the contents and processes only the\n     headlines (‘org-export-with-archived-trees’).")
-    ("author" .
-     "Toggle inclusion of author name into exported file\n     (‘org-export-with-author’).")
-    ("broken-links" .
-     "Toggles if Org should continue exporting upon finding a broken\n     internal link.  When set to ‘mark’, Org clearly marks the problem\n     link in the output (‘org-export-with-broken-links’).")
+    ("<" . "Toggle inclusion of time/date active/inactive stamps\n     (‘org-export-with-timestamps’).")
+    ("\\n" . "Toggles whether to preserve line breaks\n     (‘org-export-preserve-breaks’).")
+    ("^" . "Toggle TeX-like syntax for sub- and superscripts.  If you write\n     ‘^:{}’, ‘a_{b}’ is interpreted, but the simple ‘a_b’ is left as it\n     is (‘org-export-with-sub-superscripts’).")
+    ("arch" . "Configure how archived trees are exported.  When set to ‘headline’,\n     the export process skips the contents and processes only the\n     headlines (‘org-export-with-archived-trees’).")
+    ("author" . "Toggle inclusion of author name into exported file\n     (‘org-export-with-author’).")
+    ("broken-links" . "Toggles if Org should continue exporting upon finding a broken\n     internal link.  When set to ‘mark’, Org clearly marks the problem\n     link in the output (‘org-export-with-broken-links’).")
     ("c" . "Toggle inclusion of ‘CLOCK’ keywords (‘org-export-with-clocks’).")
-    ("creator" .
-     "Toggle inclusion of creator information in the exported file\n     (‘org-export-with-creator’).")
-    ("d" .
-     "Toggles inclusion of drawers, or list of drawers to include, or\n     list of drawers to exclude (‘org-export-with-drawers’).")
-    ("date" .
-     "Toggle inclusion of a date into exported file\n     (‘org-export-with-date’).")
+    ("creator" . "Toggle inclusion of creator information in the exported file\n     (‘org-export-with-creator’).")
+    ("d" . "Toggles inclusion of drawers, or list of drawers to include, or\n     list of drawers to exclude (‘org-export-with-drawers’).")
+    ("date" . "Toggle inclusion of a date into exported file\n     (‘org-export-with-date’).")
     ("e" . "Toggle inclusion of entities (‘org-export-with-entities’).")
-    ("email" .
-     "Toggle inclusion of the author’s e-mail into exported file\n     (‘org-export-with-email’).")
+    ("email" . "Toggle inclusion of the author’s e-mail into exported file\n     (‘org-export-with-email’).")
     ("f" . "Toggle the inclusion of footnotes (‘org-export-with-footnotes’).")
-    ("H" .
-     "Set the number of headline levels for export\n     (‘org-export-headline-levels’).  Below that level, headlines are\n     treated differently.  In most back-ends, they become list items.")
-    ("inline" .
-     "Toggle inclusion of inlinetasks (‘org-export-with-inlinetasks’).")
-    ("num" .
-     "Toggle section-numbers (‘org-export-with-section-numbers’).  When\n     set to number N, Org numbers only those headlines at level N or\n     above.  Set ‘UNNUMBERED’ property to non-‘nil’ to disable numbering\n     of heading and subheadings entirely.  Moreover, when the value is\n     ‘notoc’ the headline, and all its children, do not appear in the\n     table of contents either (see *note Table of Contents::).")
-    ("p" .
-     "Toggle export of planning information (‘org-export-with-planning’).\n     “Planning information” comes from lines located right after the\n     headline and contain any combination of these cookies: ‘SCHEDULED’,\n     ‘DEADLINE’, or ‘CLOSED’.")
-    ("pri" .
-     "Toggle inclusion of priority cookies (‘org-export-with-priority’).")
-    ("prop" .
-     "Toggle inclusion of property drawers, or list the properties to\n     include (‘org-export-with-properties’).")
-    ("stat" .
-     "Toggle inclusion of statistics cookies\n     (‘org-export-with-statistics-cookies’).")
-    ("tags" .
-     "Toggle inclusion of tags, may also be ‘not-in-toc’\n     (‘org-export-with-tags’).")
-    ("tasks" .
-     "Toggle inclusion of tasks (TODO items); or ‘nil’ to remove all\n     tasks; or ‘todo’ to remove done tasks; or list the keywords to keep\n     (‘org-export-with-tasks’).")
-    ("tex" .
-     "‘nil’ does not export; ‘t’ exports; ‘verbatim’ keeps everything in\n     verbatim (‘org-export-with-latex’).")
-    ("timestamp" .
-     "Toggle inclusion of the creation time in the exported file\n     (‘org-export-time-stamp-file’).")
+    ("H" . "Set the number of headline levels for export\n     (‘org-export-headline-levels’).  Below that level, headlines are\n     treated differently.  In most back-ends, they become list items.")
+    ("inline" . "Toggle inclusion of inlinetasks (‘org-export-with-inlinetasks’).")
+    ("num" . "Toggle section-numbers (‘org-export-with-section-numbers’).  When\n     set to number N, Org numbers only those headlines at level N or\n     above.  Set ‘UNNUMBERED’ property to non-‘nil’ to disable numbering\n     of heading and subheadings entirely.  Moreover, when the value is\n     ‘notoc’ the headline, and all its children, do not appear in the\n     table of contents either (see *note Table of Contents::).")
+    ("p" . "Toggle export of planning information (‘org-export-with-planning’).\n     “Planning information” comes from lines located right after the\n     headline and contain any combination of these cookies: ‘SCHEDULED’,\n     ‘DEADLINE’, or ‘CLOSED’.")
+    ("pri" . "Toggle inclusion of priority cookies (‘org-export-with-priority’).")
+    ("prop" . "Toggle inclusion of property drawers, or list the properties to\n     include (‘org-export-with-properties’).")
+    ("stat" . "Toggle inclusion of statistics cookies\n     (‘org-export-with-statistics-cookies’).")
+    ("tags" . "Toggle inclusion of tags, may also be ‘not-in-toc’\n     (‘org-export-with-tags’).")
+    ("tasks" . "Toggle inclusion of tasks (TODO items); or ‘nil’ to remove all\n     tasks; or ‘todo’ to remove done tasks; or list the keywords to keep\n     (‘org-export-with-tasks’).")
+    ("tex" . "‘nil’ does not export; ‘t’ exports; ‘verbatim’ keeps everything in\n     verbatim (‘org-export-with-latex’).")
+    ("timestamp" . "Toggle inclusion of the creation time in the exported file\n     (‘org-export-time-stamp-file’).")
     ("title" . "Toggle inclusion of title (‘org-export-with-title’).")
-    ("toc" .
-     "Toggle inclusion of the table of contents, or set the level limit\n     (‘org-export-with-toc’).")
-    ("todo" .
-     "Toggle inclusion of TODO keywords into exported text\n     (‘org-export-with-todo-keywords’).")
-    ("|" .
-     "Toggle inclusion of tables (‘org-export-with-tables’).\n\n   When exporting subtrees, special node properties can override the\nabove keywords.  These properties have an ‘EXPORT_’ prefix.  For\nexample, ‘DATE’ becomes, ‘EXPORT_DATE’ when used for a specific subtree.\nExcept for ‘SETUPFILE’, all other keywords listed above have an")))
+    ("toc" . "Toggle inclusion of the table of contents, or set the level limit\n     (‘org-export-with-toc’).")
+    ("todo" . "Toggle inclusion of TODO keywords into exported text\n     (‘org-export-with-todo-keywords’).")
+    ("|" . "Toggle inclusion of tables (‘org-export-with-tables’).\n\n   When exporting subtrees, special node properties can override the\nabove keywords.  These properties have an ‘EXPORT_’ prefix.  For\nexample, ‘DATE’ becomes, ‘EXPORT_DATE’ when used for a specific subtree.\nExcept for ‘SETUPFILE’, all other keywords listed above have an")))
 
 (defvar org-extra-eldoc-short-export-setting
   '(("AUTHOR" . "The document author (‘user-full-name’).")
-    ("CREATOR" .
-     "Entity responsible for output generation\n     (‘org-export-creator-string’).")
+    ("CREATOR" . "Entity responsible for output generation\n     (‘org-export-creator-string’).")
     ("DATE" . "A date or a time-stamp(2).")
     ("EMAIL" . "The email address (‘user-mail-address’).")
-    ("LANGUAGE" .
-     "Language to use for translating certain strings\n     (‘org-export-default-language’).  With ‘#+LANGUAGE: fr’, for\n     example, Org translates ‘Table of contents’ to the French ‘Table\n     des matières’(3).")
-    ("SELECT_TAGS" .
-     "The default value is ‘(\"export\")’.  When a tree is tagged with\n     ‘export’ (‘org-export-select-tags’), Org selects that tree and its\n     subtrees for export.  Org excludes trees with ‘noexport’ tags, see\n     below.  When selectively exporting files with ‘export’ tags set,\n     Org does not export any text that appears before the first\n     headline.")
-    ("EXCLUDE_TAGS" .
-     "The default value is ‘(\"noexport\")’.  When a tree is tagged with\n     ‘noexport’ (‘org-export-exclude-tags’), Org excludes that tree and\n     its subtrees from export.  Entries tagged with ‘noexport’ are\n     unconditionally excluded from the export, even if they have an\n     ‘export’ tag.  Even if a subtree is not exported, Org executes any\n     code blocks contained there.")
-    ("TITLE" .
-     "Org displays this title.  For long titles, use multiple ‘#+TITLE’ lines.")
-    ("EXPORT_FILE_NAME" .
-     "The name of the output file to be generated.  Otherwise, Org\n     generates the file name based on the buffer name and the extension\n     based on the back-end format.\n\n   The ‘OPTIONS’ keyword is a compact form.  To configure multiple\noptions, use several ‘OPTIONS’ lines.  ‘OPTIONS’ recognizes the\nfollowing arguments.")
+    ("LANGUAGE" . "Language to use for translating certain strings\n     (‘org-export-default-language’).  With ‘#+LANGUAGE: fr’, for\n     example, Org translates ‘Table of contents’ to the French ‘Table\n     des matières’(3).")
+    ("SELECT_TAGS" . "The default value is ‘(\"export\")’.  When a tree is tagged with\n     ‘export’ (‘org-export-select-tags’), Org selects that tree and its\n     subtrees for export.  Org excludes trees with ‘noexport’ tags, see\n     below.  When selectively exporting files with ‘export’ tags set,\n     Org does not export any text that appears before the first\n     headline.")
+    ("EXCLUDE_TAGS" . "The default value is ‘(\"noexport\")’.  When a tree is tagged with\n     ‘noexport’ (‘org-export-exclude-tags’), Org excludes that tree and\n     its subtrees from export.  Entries tagged with ‘noexport’ are\n     unconditionally excluded from the export, even if they have an\n     ‘export’ tag.  Even if a subtree is not exported, Org executes any\n     code blocks contained there.")
+    ("TITLE" . "Org displays this title.  For long titles, use multiple ‘#+TITLE’ lines.")
+    ("EXPORT_FILE_NAME" . "The name of the output file to be generated.  Otherwise, Org\n     generates the file name based on the buffer name and the extension\n     based on the back-end format.\n\n   The ‘OPTIONS’ keyword is a compact form.  To configure multiple\noptions, use several ‘OPTIONS’ lines.  ‘OPTIONS’ recognizes the\nfollowing arguments.")
     ("ARCHIVE" . "Sets the archive location of the agenda file")
-    ("CONSTANTS" .
-     "Set file-local values for constants that table formulas can use")
+    ("CONSTANTS" . "Set file-local values for constants that table formulas can use")
     ("FILETAGS" . "#+FILETAGS: :tag1:tag2:tag3:")
-    ("LINK"
-     .
-     "#+LINK: linkword replace Each line specifies one abbreviation for one link")
+    ("LINK" . "#+LINK: linkword replace Each line specifies one abbreviation for one link")
     ("PROPERTY" . "#+PROPERTY: Property_Name Value")
-    ("ALLTAGS" .
-     "All tags, including inherited ones.")
-    ("BLOCKED" .
-     "‘t’ if task is currently blocked by children or siblings.")
-    ("CATEGORY" .
-     "The category of an entry.")
-    ("CLOCKSUM" .
-     "The sum of CLOCK intervals in the subtree.  ‘org-clock-sum’\n                 must be run first to compute the values in the current buffer.")
-    ("CLOCKSUM_T" .
-     "The sum of CLOCK intervals in the subtree for today.\n                 ‘org-clock-sum-today’ must be run first to compute the\n                 values in the current buffer.")
-    ("CLOSED" .
-     "When was this entry closed?")
+    ("ALLTAGS" . "All tags, including inherited ones.")
+    ("BLOCKED" . "‘t’ if task is currently blocked by children or siblings.")
+    ("CATEGORY" . "The category of an entry.")
+    ("CLOCKSUM" . "The sum of CLOCK intervals in the subtree.  ‘org-clock-sum’\n                 must be run first to compute the values in the current buffer.")
+    ("CLOCKSUM_T" . "The sum of CLOCK intervals in the subtree for today.\n                 ‘org-clock-sum-today’ must be run first to compute the\n                 values in the current buffer.")
+    ("CLOSED" . "When was this entry closed?")
     ("DEADLINE" . "The deadline timestamp.")
-    ("FILE" .
-     "The filename the entry is located in.")
+    ("FILE" . "The filename the entry is located in.")
     ("ITEM" . "The headline of the entry.")
-    ("PRIORITY" .
-     "The priority of the entry, a string with a single letter.")
-    ("SCHEDULED" .
-     "The scheduling timestamp.")
-    ("TAGS" .
-     "The tags defined directly in the headline. (‘org-tag-alist’)")
-    ("TIMESTAMP" .
-     "The first keyword-less timestamp in the entry.")
-    ("TIMESTAMP_IA" .
-     "The first inactive timestamp in the entry.")
-    ("TODO" .
-     "The TODO keyword of the entry.")
-    ("DESCRIPTION" .
-     "This is the document’s description, which the HTML exporter inserts\n     it as a HTML meta tag in the HTML file.  For long descriptions, use\n     multiple ‘DESCRIPTION’ lines.  The exporter takes care of wrapping\n     the lines properly.\n\n     The exporter includes a number of other meta tags, which can be\n     customized by modifying ‘org-html-meta-tags’.")
-    ("HTML_DOCTYPE" .
-     "Specify the document type, for example: HTML5 (‘org-html-doctype’).")
-    ("HTML_CONTAINER" .
-     "Specify the HTML container, such as ‘div’, for wrapping sections\n     and elements (‘org-html-container-element’).")
+    ("PRIORITY" . "The priority of the entry, a string with a single letter.")
+    ("SCHEDULED" . "The scheduling timestamp.")
+    ("TAGS" . "The tags defined directly in the headline. (‘org-tag-alist’)")
+    ("TIMESTAMP" . "The first keyword-less timestamp in the entry.")
+    ("TIMESTAMP_IA" . "The first inactive timestamp in the entry.")
+    ("TODO" . "The TODO keyword of the entry.")
+    ("DESCRIPTION" . "This is the document’s description, which the HTML exporter inserts\n     it as a HTML meta tag in the HTML file.  For long descriptions, use\n     multiple ‘DESCRIPTION’ lines.  The exporter takes care of wrapping\n     the lines properly.\n\n     The exporter includes a number of other meta tags, which can be\n     customized by modifying ‘org-html-meta-tags’.")
+    ("HTML_DOCTYPE" . "Specify the document type, for example: HTML5 (‘org-html-doctype’).")
+    ("HTML_CONTAINER" . "Specify the HTML container, such as ‘div’, for wrapping sections\n     and elements (‘org-html-container-element’).")
     ("HTML_LINK_HOME" . "The URL for home link (‘org-html-link-home’).")
-    ("HTML_LINK_UP" .
-     "The URL for the up link of exported HTML pages\n     (‘org-html-link-up’).")
-    ("HTML_MATHJAX" .
-     "Options for MathJax (‘org-html-mathjax-options’).  MathJax is used\n     to typeset LaTeX math in HTML documents.  See *note Math formatting\n     in HTML export::, for an example.")
-    ("HTML_HEAD" .
-     "Arbitrary lines for appending to the HTML document’s head\n     (‘org-html-head’).")
-    ("HTML_HEAD_EXTRA" .
-     "More arbitrary lines for appending to the HTML document’s head\n     (‘org-html-head-extra’).")
-    ("KEYWORDS" .
-     "Keywords to describe the document’s content.  HTML exporter inserts\n     these keywords as HTML meta tags.  For long keywords, use multiple\n     ‘KEYWORDS’ lines.")
-    ("LATEX_HEADER" .
-     "Arbitrary lines for appending to the preamble; HTML exporter\n     appends when transcoding LaTeX fragments to images (see *note Math\n     formatting in HTML export::).")
+    ("HTML_LINK_UP" . "The URL for the up link of exported HTML pages\n     (‘org-html-link-up’).")
+    ("HTML_MATHJAX" . "Options for MathJax (‘org-html-mathjax-options’).  MathJax is used\n     to typeset LaTeX math in HTML documents.  See *note Math formatting\n     in HTML export::, for an example.")
+    ("HTML_HEAD" . "Arbitrary lines for appending to the HTML document’s head\n     (‘org-html-head’).")
+    ("HTML_HEAD_EXTRA" . "More arbitrary lines for appending to the HTML document’s head\n     (‘org-html-head-extra’).")
+    ("KEYWORDS" . "Keywords to describe the document’s content.  HTML exporter inserts\n     these keywords as HTML meta tags.  For long keywords, use multiple\n     ‘KEYWORDS’ lines.")
+    ("LATEX_HEADER" . "Arbitrary lines for appending to the preamble; HTML exporter\n     appends when transcoding LaTeX fragments to images (see *note Math\n     formatting in HTML export::).")
     ("SUBTITLE" . "The document’s subtitle.  HTML exporter formats subtitle if
      document type is ‘HTML5’ and the CSS has a ‘subtitle’ class.")))
 
@@ -549,7 +531,6 @@ except that ] is never special and \ quotes ^, - or \ (but
             (org-extra-substitute-get-vars
              descr))))
 
-
 (defun org-extra-eldoc-next-variable ()
   "Substitute STR with variable values in BUFF."
   (when (re-search-forward "[‘]\\([^’]+\\)[’]"
@@ -560,10 +541,6 @@ except that ] is never special and \ quotes ^, - or \ (but
       (when (boundp sym)
         sym))))
 
-
-
-
- 
 (defun org-extra-eldoc-extract-settings (info-str)
   "Extract alist of settings from manual INFO-STR."
   (let ((regex "^[‘]\\([^’]+\\)[’]")
@@ -776,7 +753,6 @@ Call other documentation functions depending on lang when inside src body."
               (org-extra-eldoc-info))))
     res))
 
-
 (defun org-extra-src-block-params-inner ()
   "If point is inside body of src block return list - (LANGUAGE BEGINNING END)."
   (save-excursion
@@ -854,47 +830,109 @@ is that this function delay language mode hooks to increase speedup.
 
 Usage:
 
-\=(advice-add #\='org-src-font-lock-fontify-block
-              :override #\='org-extra-src-fontify-advice)."
-  (let ((lang-mode (org-src-get-lang-mode lang)))
-    (when (fboundp lang-mode)
-      (let ((string (buffer-substring-no-properties start end))
-            (modified (buffer-modified-p))
-            (org-buffer (current-buffer)))
-        (remove-text-properties start end '(face nil))
-        (with-current-buffer
-            (get-buffer-create
-             (format " *org-src-fontification:%s*" lang-mode))
-          (let ((inhibit-modification-hooks nil))
-            (erase-buffer)
-            ;; Add string and a final space to ensure property change.
-            (insert string " "))
-          (delay-mode-hooks
+\\=(advice-add #\\='org-src-font-lock-fontify-block
+            :override #\\='org-extra-src-fontify-advice)."
+  (let ((modified (buffer-modified-p)) native-tab-width)
+    (remove-text-properties start end '(face nil))
+    (let ((lang-mode (org-src-get-lang-mode lang)))
+      (when (fboundp lang-mode)
+        (let ((string (buffer-substring-no-properties start end))
+              (org-buffer (current-buffer)))
+          (with-current-buffer
+              (get-buffer-create
+               (format " *org-src-fontification:%s*" lang-mode))
+            (let ((inhibit-modification-hooks nil))
+              (erase-buffer)
+              ;; Add string and a final space to ensure property change.
+              (insert string " "))
             (unless (eq major-mode lang-mode)
-              (funcall lang-mode))
+              (delay-mode-hooks (funcall lang-mode)))
+            (setq native-tab-width tab-width)
             (font-lock-ensure)
             (let ((pos (point-min)) next)
               (while (setq next (next-property-change pos))
-                ;; Handle additional properties from font-lock, so as to
-                ;; preserve, e.g., composition.
-                (dolist (prop (cons 'face font-lock-extra-managed-props))
+              ;; Handle additional properties from font-lock, so as to
+              ;; preserve, e.g., composition.
+              ;; FIXME: We copy 'font-lock-face property explicitly because
+              ;; `font-lock-mode' is not enabled in the buffers starting from
+              ;; space and the remapping between 'font-lock-face and 'face
+              ;; text properties may thus not be set.  See commit
+              ;; 453d634bc.
+                (dolist (prop (append '(font-lock-face face)
+                                      font-lock-extra-managed-props))
                   (let ((new-prop (get-text-property pos prop)))
-                    (put-text-property
-                     (+ start (1- pos))
-                     (1- (+ start next)) prop new-prop
-                     org-buffer)))
+                    (when new-prop
+                      (if (not (eq prop 'invisible))
+                          (put-text-property
+                           (+ start (1- pos))
+                           (1- (+ start next)) prop new-prop
+                           org-buffer)
+                           ;; Special case.  `invisible' text property may
+                           ;; clash with Org folding.  Do not assign
+                           ;; `invisible' text property directly.  Use
+                           ;; property alias instead.
+                        (let ((invisibility-spec
+                               (or
+                               ;; ATOM spec.
+                                (and (memq new-prop buffer-invisibility-spec)
+                                     new-prop)
+                                     ;; (ATOM . ELLIPSIS) spec.
+                                (assq new-prop buffer-invisibility-spec))))
+                          (with-current-buffer org-buffer
+                          ;; Add new property alias.
+                            (unless (memq 'org-src-invisible
+                                          (cdr (assq 'invisible
+                                                     char-property-alias-alist)))
+                              (setq-local char-property-alias-alist
+                                          (cons (cons 'invisible
+                                                      (nconc (cdr (assq 'invisible char-property-alias-alist))
+                                                             '(org-src-invisible)))
+                                                (remove (assq 'invisible char-property-alias-alist)
+                                                        char-property-alias-alist))))
+                                                        ;; Carry over the invisibility spec, unless
+                                                        ;; already present.  Note that there might
+                                                        ;; be conflicting invisibility specs from
+                                                        ;; different major modes.  We cannot do much
+                                                        ;; about this then.
+                            (when invisibility-spec
+                              (add-to-invisibility-spec invisibility-spec))
+                            (put-text-property
+                             (+ start (1- pos))
+                             (1- (+ start next))
+                             'org-src-invisible new-prop
+                             org-buffer)))))))
                 (setq pos next)))
-            (set-buffer-modified-p nil)))
-        ;; Add Org faces.
-        (let ((src-face (nth 1 (assoc-string lang org-src-block-faces t))))
-          (when (or (facep src-face)
-                    (listp src-face))
-            (font-lock-append-text-property start end 'face src-face))
-          (font-lock-append-text-property start end 'face 'org-block))
-        (add-text-properties
-         start end
-         '(font-lock-fontified t fontified t font-lock-multiline t))
-        (set-buffer-modified-p modified)))))
+            (set-buffer-modified-p nil)))))
+            ;; Add Org faces.
+    (let ((src-face (nth 1 (assoc-string lang org-src-block-faces t))))
+      (when (or (facep src-face)
+                (listp src-face))
+        (font-lock-append-text-property start end 'face src-face))
+      (font-lock-append-text-property start end 'face 'org-block))
+      ;; Display native tab indentation characters as spaces
+    (save-excursion
+      (goto-char start)
+      (let ((indent-offset
+             (if (org-src-preserve-indentation-p) 0
+               (+ (progn (backward-char)
+                         (let ((buffer-invisibility-spec nil))
+                           (current-indentation)))
+                  org-edit-src-content-indentation))))
+        (while (re-search-forward "^[ ]*\t" end t)
+          (let* ((b (and (eq indent-offset (move-to-column indent-offset))
+                         (point)))
+                 (e (progn (skip-chars-forward "\t")
+                           (point)))
+                 (s (and b (make-string (* (- e b) native-tab-width) ? ))))
+            (when (and b (< b e))
+              (add-text-properties b e `(display ,s)))
+            (forward-char)))))
+            ;; Clear abbreviated link folding.
+    (org-fold-region start end nil 'org-link)
+    (add-text-properties
+     start end
+     '(font-lock-fontified t fontified t font-lock-multiline t))
+    (set-buffer-modified-p modified)))
 
 (defun org-extra-bounds-of-current-block ()
   "Return list of (BLOCK-TYPE BEGINNING END).
@@ -965,6 +1003,36 @@ Default value of TIMEOUT is 0.2 seconds."
                (apply fn args))
       (delete-overlay overlay))))
 
+(defun org-extra-apply-with-overlay (beg end props fn &rest args)
+  "Apply a function with specified overlay properties between two points.
+
+Argument BEG is a position (integer or marker) specifying the beginning of the
+region to overlay.
+Argument END is a position (integer or marker) specifying the END of the region
+to overlay.
+Argument PROPS is a list of properties to apply to the overlay.
+It can be nil.
+Argument FN is a function to be applied within the overlay.
+Optional argument ARGS is a list of arguments to pass to the function FN.
+It can be empty."
+  (let ((overlay (make-overlay beg end)))
+    (unwind-protect
+        (progn
+          (org-extra-add-overlay-props overlay
+                                       (or props
+                                           '(face
+                                             font-lock-warning-face)))
+          (apply fn args))
+      (delete-overlay overlay))))
+
+(defun org-extra-add-overlay-props (overlay props)
+  "Add plist PROPS to OVERLAY."
+  (dotimes (idx (length props))
+    (when (eq (logand idx 1) 0)
+      (let* ((prop-name (nth idx props))
+             (val (plist-get props prop-name)))
+        (overlay-put overlay prop-name val)))))
+
 (defun org-extra-call-with-overlays (alist-bounds fn &rest args)
   "Highlight region from ALIST-BOUNDS while invoking FN with ARGS."
   (let ((overlays (mapcar (lambda (it)
@@ -982,11 +1050,12 @@ Default value of TIMEOUT is 0.2 seconds."
 (defun org-extra-read-language (code)
   "Read org language using detected language in CODE as initial input.
 This function use library `language-detection'."
-  (let ((detected-lang (when (and
-                              (require 'language-detection nil t)
-                              (fboundp 'language-detection-string))
-                         (alist-get (language-detection-string code)
-                                    org-extra-languages-alist))))
+  (let ((detected-lang
+         (when (and
+                (require 'language-detection nil t)
+                (fboundp 'language-detection-string))
+           (alist-get (language-detection-string code)
+                      org-extra-languages-alist))))
     (org-extra-read-babel-languages "Language: " nil nil
                                     detected-lang
                                     nil detected-lang)))
@@ -1093,41 +1162,142 @@ If LANGUAGE is omitted, read it with completions."
    (while (re-search-backward "#\\+\\(begin\\)_example" nil t 1)
      (org-extra-example-block-to-src language suffix))))
 
+(defun org-extra-flatten-alists (items &optional acc)
+  "Flatten nested association lists into a single list'.
+
+Argument ITEMS is a list of nested alists and conses.
+
+Optional argument ACC is a list that accumulates the results of the function
+`org-extra-flatten-alists'."
+  (cond ((and items
+              (proper-list-p items))
+         (seq-mapcat #'org-extra-flatten-alists
+                     items))
+        ((and
+          items
+          (consp items)
+          (not (listp (cdr items))))
+         (push items acc))
+        (t acc)))
+
+(defun org-extra-get-code-name (code &optional src-mode)
+  "Extracts and return a list of CODE names from the provided CODE string.
+
+Argument CODE is a string that represents the CODE to be processed.
+
+Optional argument SRC-MODE is a symbol that represents the source mode to be
+used for processing the CODE.
+If not provided, it defaults to nil."
+  (let ((re (org-babel-noweb-wrap)))
+    (with-temp-buffer
+      (require 'imenu)
+      (insert code)
+      (while (re-search-backward re nil t 1)
+        (let ((beg (match-beginning 0))
+              (end (match-end 0)))
+          (delete-region beg end)))
+      (funcall src-mode)
+      (let ((result
+             (ignore-errors
+               (mapcar 'car (org-extra-flatten-alists
+                             (funcall
+                              imenu-create-index-function))))))
+        (pcase src-mode
+          ('emacs-lisp-mode
+           (let ((sexp))
+             (goto-char (point-min))
+             (while
+                 (setq sexp (ignore-errors (read (current-buffer))))
+               (when (listp sexp)
+                 (pcase-let
+                     ((`(,type ,name . ,_rest) sexp))
+                   (cond ((and name (symbolp name)
+                               (not (eq name t))
+                               (memq type
+                                     '(define-skeleton
+                                        ert-deftest
+                                        define-widget
+                                        easy-mmode-define-minor-mode
+                                        defclass cl-defstruct
+                                        defvar defconst
+                                        defvar defface
+                                        defcustom defgroup deftheme
+                                        defun defmacro defsubst
+                                        defalias
+                                        defhydra transient-define-prefix
+                                        transient-define-suffix
+                                        transient-define-argument
+                                        transient-define-infix
+                                        cl-defun cl-defsubst
+                                        cl-defmacro
+                                        cl-defgeneric
+                                        cl-defmethod define-minor-mode
+                                        define-derived-mode
+                                        define-generic-mode
+                                        define-compilation-mode
+                                        easy-mmode-define-minor-mode))
+                               (let ((str (symbol-name
+                                           name)))
+                                 (unless (member str
+                                                 result)
+                                   (push str
+                                         result))))))))))))
+        result))))
+
 ;;;###autoload
 (defun org-extra-add-names-to-src-blocks ()
   "Add names to all src blocks if package `org-extra-complete' installed."
   (interactive)
   (require 'org-extra-complete nil t)
   (widen)
-  (org-babel-map-src-blocks buffer-read-only
-    (let ((case-fold-search t))
-      (goto-char beg-block)
-      (recenter-top-bottom)
-      (while (and
-              (not (bobp))
-              (looking-at "[\s\t]*#\\+")
-              (not (looking-at "[\s\t]*#\\+name:")))
-        (forward-line -1))
-      (unless (looking-at "[\s\t]*#\\+name:[\s\t][a-z0-9]+")
-        (org-fold-show-all)
-        (if (looking-at "[\s\t]*#\\+name:")
-            (progn
-              (re-search-forward "#\\+name:" nil t 1)
-              (skip-chars-forward "\s\t")
-              (if (fboundp 'org-extra-complete)
-                  (org-extra-complete)
-                (insert (concat (if (looking-back ":" 0) " " "")
-                                (read-string "#\\+name: ")))))
-          (when-let ((name (org-extra-overlay-prompt-region
+  (goto-char (point-min))
+  (let ((case-fold-search t))
+    (while (re-search-forward org-babel-src-block-regexp nil t)
+      (when (org-babel-active-location-p)
+        (let ((full-block (match-string 0))
+              (beg-block (match-beginning 0))
+              (end-block (match-end 0))
+              (lang (match-string 2))
+              (beg-lang (match-beginning 2))
+              (end-lang (match-end 2))
+              (switches (match-string 3))
+              (beg-switches (match-beginning 3))
+              (end-switches (match-end 3))
+              (header-args (match-string 4))
+              (beg-header-args (match-beginning 4))
+              (end-header-args (match-end 4))
+              (body (match-string 5))
+              (beg-body (match-beginning 5))
+              (end-body (match-end 5)))
+          ;; Silence byte-compiler in case `body' doesn't use all
+          ;; those variables.
+          (ignore full-block beg-block end-block lang
+                  beg-lang end-lang switches beg-switches
+                  end-switches header-args beg-header-args
+                  end-header-args body beg-body end-body)
+          (unless (nth 4 (org-babel-get-src-block-info 'no-eval))
+            (save-excursion
+              (goto-char beg-block)
+              (recenter-top-bottom)
+              (let* ((choices (org-extra-get-code-name
+                               body
+                               (org-src-get-lang-mode lang)))
+                     (name (org-extra-apply-with-overlay
                             (line-beginning-position)
                             (line-end-position)
-                            (lambda ()
-                              (if (fboundp 'org-extra-complete-name)
-                                  (org-extra-complete-name)
-                                (read-string "#\\+name: "))))))
-            (insert (concat "\n" "#+name: " name (if (looking-at "[\s\t]*\n")
-                                                     ""
-                                                   "\n")))))))))
+                            `(before-string
+                              ,(propertize (concat "#+name: " (or
+                                                               (car
+                                                                choices)
+                                                               "")
+                                                   "\n")
+                                           'face 'font-lock-warning-face))
+                            #'completing-read
+                            "#+name: "
+                            choices)))
+                (unless (string-empty-p name)
+                  (insert "#+name: " name "\n")))))
+          (goto-char end-block))))))
 
 (defun org-extra-get-html-head ()
   "Return string with custom styles for `org-html-head'."
@@ -1240,8 +1410,8 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Org CDLaTeX mode"
-                                                            org-cdlatex-mode "+"
-                                                            "" "[" "]"))
+                                              org-cdlatex-mode "+"
+                                              "" "[" "]"))
     :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1249,8 +1419,8 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Org CDLaTeX mode"
-                                                            org-cdlatex-mode "+"
-                                                            "" "[" "]"))
+                                              org-cdlatex-mode "+"
+                                              "" "[" "]"))
     :transient t)
    ("m" "Modify math symbol" org-cdlatex-math-modify :inapt-if-not
     (lambda ()
@@ -1317,6 +1487,7 @@ clocking selection, associated with the letter `d'."
                                               org-log-done "+" ""
                                               "[" "]"))
     :transient t)])
+
 ;;;###autoload (autoload 'org-extra-dates-and-scheduling-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-dates-and-scheduling-menu ()
   "Transient menu for Dates and Scheduling commands."
@@ -1346,13 +1517,13 @@ clocking selection, associated with the letter `d'."
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Custom time format"
-                                                            org-display-custom-times
-                                                            "*" "" "(" ")"))
+                                              org-display-custom-times
+                                              "*" "" "(" ")"))
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Custom time format"
-                                                            org-display-custom-times
-                                                            "*" "" "(" ")"))
+                                              org-display-custom-times
+                                              "*" "" "(" ")"))
     :transient t)
    ("g" "Goto Calendar (C-c >)" org-goto-calendar)
    ("a" "Date from Calendar (C-c <)" org-date-from-calendar)
@@ -1361,6 +1532,7 @@ clocking selection, associated with the letter `d'."
    ("m" "Stop Timer (C-c C-x ,)" org-timer-pause-or-continue)
    ("n" "Insert Timer String (C-c C-x .)" org-timer)
    ("e" "Insert Timer Item (C-c C-x -)" org-timer-item)])
+
 ;;;###autoload (autoload 'org-extra-change-date-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-change-date-menu ()
   "Transient menu for Change Date commands."
@@ -1380,6 +1552,7 @@ clocking selection, associated with the letter `d'."
     (lambda ()
       (ignore-errors
         (org-at-timestamp-p 'lax))))])
+
 ;;;###autoload (autoload 'org-extra-tags-and-properties-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-tags-and-properties-menu ()
   "Transient menu for TAGS and Properties commands."
@@ -1510,6 +1683,7 @@ clocking selection, associated with the letter `d'."
           (length org-todo-sets)
           1)
          (org-at-heading-p)))))])
+
 ;;;###autoload (autoload 'org-extra-hyperlinks-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-hyperlinks-menu ()
   "Transient menu for Hyperlinks commands."
@@ -1525,29 +1699,29 @@ clocking selection, associated with the letter `d'."
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Descriptive Links"
-                                                            org-link-descriptive
-                                                            "*" "" "(" ")"))
+                                              org-link-descriptive
+                                              "*" "" "(" ")"))
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Descriptive Links"
-                                                            org-link-descriptive
-                                                            "*" "" "(" ")"))
+                                              org-link-descriptive
+                                              "*" "" "(" ")"))
     :transient t)
    ("l" org-toggle-link-display
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Literal Links"
-                                                            (not
-                                                             org-descriptive-links)
-                                                            "*" ""
-                                                            "(" ")"))
+                                              (not
+                                               org-descriptive-links)
+                                              "*" ""
+                                              "(" ")"))
     :description
     (lambda ()
       (org-extra--bar-make-toggle-description "Literal Links"
-                                                            (not
-                                                             org-link-descriptive)
-                                                            "*" ""
-                                                            "(" ")"))
+                                              (not
+                                               org-link-descriptive)
+                                              "*" ""
+                                              "(" ")"))
     :transient t)])
 
 ;;;###autoload (autoload 'org-extra-archive-menu "org-extra.el" nil t)
@@ -1821,7 +1995,6 @@ clocking selection, associated with the letter `d'."
      org-timer-item)
     ("h" "Schedule" org-schedule)]])
 
-
 ;;;###autoload
 (defun org-extra-agenda-archives-files ()
   "Toggle inclusion of files in trees marked with :ARCHIVE:."
@@ -1910,7 +2083,6 @@ clocking selection, associated with the letter `d'."
    ("t" "Timestamp" org-toggle-timestamp-type)
    ("e" "Custom time stamp formats" org-toggle-time-stamp-overlays)
    ("u" "Debugging flags for ‘org-gcal’" org-gcal-toggle-debug)])
-
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
