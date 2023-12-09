@@ -6,7 +6,7 @@
 ;; URL: https://github.com/KarimAziev/org-extra
 ;; Keywords: outlines
 ;; Version: 0.1.1
-;; Package-Requires: ((emacs "28.1") (org "9.6.3") (transient "0.4.1"))
+;; Package-Requires: ((emacs "29.1") (org "9.6.11") (transient "0.4.3"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is NOT part of GNU Emacs.
@@ -792,6 +792,7 @@ Call other documentation functions depending on lang when inside src body."
                          'font-lock-function-name-face
                        'font-lock-keyword-face)))))
 
+
 ;;;###autoload
 (defun org-extra-back-to-heading ()
   "Move to the heading line of which the present line is a subheading."
@@ -993,7 +994,7 @@ Beginning and end is bounds of inner content. For example: (example 4292 4486)."
 Default value of TIMEOUT is 0.2 seconds."
   (let ((overlay (make-overlay start end)))
     (overlay-put overlay 'face (or face 'diary))
-    (run-with-timer (or timeout 0.2) nil 'delete-overlay overlay)))
+    (run-with-timer (or timeout 0.2) nil #'delete-overlay overlay)))
 
 (defun org-extra-overlay-prompt-region (beg end fn &rest args)
   "Highlight region from BEG to END while invoking FN with ARGS."
@@ -1026,7 +1027,12 @@ It can be empty."
       (delete-overlay overlay))))
 
 (defun org-extra-add-overlay-props (overlay props)
-  "Add plist PROPS to OVERLAY."
+  "Add properties from PROPS to OVERLAY.
+
+Argument OVERLAY is the overlay to which properties will be added.
+
+Argument PROPS is a property list where even-indexed elements are property names
+and the following odd-indexed element is the corresponding value."
   (dotimes (idx (length props))
     (when (eq (logand idx 1) 0)
       (let* ((prop-name (nth idx props))
@@ -1034,7 +1040,14 @@ It can be empty."
         (overlay-put overlay prop-name val)))))
 
 (defun org-extra-call-with-overlays (alist-bounds fn &rest args)
-  "Highlight region from ALIST-BOUNDS while invoking FN with ARGS."
+  "Apply FN to ARGS with temporary overlays.
+
+Argument ALIST-BOUNDS is a list of cons cells, where each cons cell contains a
+pair of buffer positions (START . END) defining the bounds for an overlay.
+
+Argument FN is the function to be called with the specified arguments.
+
+Remaining arguments ARGS are passed to the function FN."
   (let ((overlays (mapcar (lambda (it)
                             (make-overlay (car it)
                                           (cdr it)))
@@ -1048,8 +1061,9 @@ It can be empty."
         (delete-overlay overlay)))))
 
 (defun org-extra-read-language (code)
-  "Read org language using detected language in CODE as initial input.
-This function use library `language-detection'."
+  "Prompt for a language with completion, defaulting to detected language.
+
+Argument CODE is a string containing the source code for language detection."
   (let ((detected-lang
          (when (and
                 (require 'language-detection nil t)
@@ -1062,8 +1076,10 @@ This function use library `language-detection'."
 
 ;;;###autoload
 (defun org-extra-example-blocks-to-org-src (language)
-  "Convert example blocks in buffer to begin/end_SUFFIX blocks with LANGUAGE.
-If LANGUAGE is omitted, read it with completions."
+  "Convert example blocks to source blocks in Org mode.
+
+Argument LANGUAGE is a string representing the programming language for the
+source code block."
   (interactive (list
                 (org-extra-read-babel-languages "Language: " nil nil
                                                 nil
@@ -1076,8 +1092,14 @@ If LANGUAGE is omitted, read it with completions."
 
 ;;;###autoload
 (defun org-extra-example-block-to-src (&optional language suffix)
-  "Convert example block at point to begin/end_SUFFIX with LANGUAGE.
-If LANGUAGE is omitted, read it with completions."
+  "Convert an Org example block to a source code block.
+
+Optional argument LANGUAGE is a string specifying the programming language for
+the source block.
+
+Optional argument SUFFIX is a string appended to the \"#+begin_\" line of the
+source block; it defaults to \"src\" if LANGUAGE is provided, otherwise it is
+prompted from the user."
   (interactive)
   (save-excursion
     (when-let ((info (org-extra-bounds-of-current-block)))
@@ -1153,8 +1175,13 @@ If LANGUAGE is omitted, read it with completions."
 
 ;;;###autoload
 (defun org-extra-example-blocks-to-org (&optional language suffix)
-  "Convert example blocks in buffer to begin/end_SUFFIX blocks with LANGUAGE.
-If LANGUAGE is omitted, read it with completions."
+  "Convert example blocks to source blocks in Org mode.
+
+Optional argument LANGUAGE is a string specifying the programming language for
+the source block.
+
+Optional argument SUFFIX is a string appended to the source block's header
+arguments."
   (interactive)
   (org-with-wide-buffer
    (widen)
@@ -1163,12 +1190,11 @@ If LANGUAGE is omitted, read it with completions."
      (org-extra-example-block-to-src language suffix))))
 
 (defun org-extra-flatten-alists (items &optional acc)
-  "Flatten nested association lists into a single list'.
+  "Flatten nested lists in ITEMS into a single list.
 
-Argument ITEMS is a list of nested alists and conses.
+Argument ITEMS is a list of items to flatten.
 
-Optional argument ACC is a list that accumulates the results of the function
-`org-extra-flatten-alists'."
+Optional argument ACC is an accumulator for the result, initially nil."
   (cond ((and items
               (proper-list-p items))
          (seq-mapcat #'org-extra-flatten-alists
@@ -1181,13 +1207,12 @@ Optional argument ACC is a list that accumulates the results of the function
         (t acc)))
 
 (defun org-extra-get-code-name (code &optional src-mode)
-  "Extracts and return a list of CODE names from the provided CODE string.
+  "Extract CODE block names from `code' using SRC-MODE.
 
-Argument CODE is a string that represents the CODE to be processed.
+Argument CODE is a string containing the source code to be analyzed.
 
-Optional argument SRC-MODE is a symbol that represents the source mode to be
-used for processing the CODE.
-If not provided, it defaults to nil."
+Optional argument SRC-MODE is a major mode function used to set the buffer's
+mode for parsing CODE."
   (let ((re (org-babel-noweb-wrap)))
     (with-temp-buffer
       (require 'imenu)
@@ -1199,7 +1224,7 @@ If not provided, it defaults to nil."
       (funcall src-mode)
       (let ((result
              (ignore-errors
-               (mapcar 'car (org-extra-flatten-alists
+               (mapcar #'car (org-extra-flatten-alists
                              (funcall
                               imenu-create-index-function))))))
         (pcase src-mode
@@ -1246,7 +1271,7 @@ If not provided, it defaults to nil."
 
 ;;;###autoload
 (defun org-extra-add-names-to-src-blocks ()
-  "Add names to all src blocks if package `org-extra-complete' installed."
+  "Add names to unnamed Org source blocks."
   (interactive)
   (require 'org-extra-complete nil t)
   (widen)
@@ -1300,7 +1325,7 @@ If not provided, it defaults to nil."
           (goto-char end-block))))))
 
 (defun org-extra-get-html-head ()
-  "Return string with custom styles for `org-html-head'."
+  "Extract and format CSS content for HTML head from a file."
   (let ((content (with-temp-buffer
                    (erase-buffer)
                    (insert-file-contents (expand-file-name
@@ -1310,7 +1335,7 @@ If not provided, it defaults to nil."
     (format "<style type=\"text/css\">\n%s</style>" content)))
 
 (defun org-extra-get-html-scripts ()
-  "Return string with custom styles for `org-html-scripts'."
+  "Insert JavaScript content into an HTML script tag."
   (let ((content (with-temp-buffer
                    (erase-buffer)
                    (insert-file-contents (expand-file-name
@@ -1321,7 +1346,7 @@ If not provided, it defaults to nil."
 
 ;;;###autoload
 (defun org-extra-narrow-to-block-content ()
-  "Narrow to inner content of current block."
+  "Narrow view to the content of the current Org block."
   (interactive)
   (if (buffer-narrowed-p)
       (widen)
@@ -1333,8 +1358,23 @@ If not provided, it defaults to nil."
                                                            on-label off-label
                                                            left-separator
                                                            right-separator)
-  "Enhance DESCRIPTION for VALUE with ON-LABEL or OFF-LABEL.
-Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
+  "Create a toggle DESCRIPTION with alignment and optional labels.
+
+Argument DESCRIPTION is a string that represents the description of the toggle.
+
+Argument VALUE is a boolean indicating the current state of the toggle.
+
+Optional argument ON-LABEL is a string used when VALUE is non-nil. It defaults
+to \"+\".
+
+Optional argument OFF-LABEL is a string used when VALUE is nil. It defaults to
+\"-\".
+
+Optional argument LEFT-SEPARATOR is a string placed before the ON-LABEL or
+OFF-LABEL. It has no default value.
+
+Optional argument RIGHT-SEPARATOR is a string placed after the ON-LABEL or
+OFF-LABEL. It has no default value."
   (let* ((description (or description ""))
          (align (apply #'max (list (+ 5 (length description))
                                    45))))
@@ -1355,7 +1395,7 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
 
 ;;;###autoload (autoload 'org-extra-org-mode-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-org-mode-menu ()
-  "Transient menu for Org commands."
+  "Define a menu for Org mode with various actions."
   [("s" "Show/Hide" org-extra-show-hide-menu)
    ("n" "New Heading" org-insert-heading)
    ("a" "Navigate Headings" org-extra-navigate-headings-menu)
@@ -1380,32 +1420,32 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
 
 ;;;###autoload
 (defun org-extra-reload ()
-  "Reload Org uncompiled."
+  "Reload Org mode with optional setup."
   (interactive)
   (org-reload t))
 
 ;;;###autoload (autoload 'org-extra-refresh-reload-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-refresh-reload-menu ()
-  "Transient menu for Refresh/Reload commands."
+  "Reload Org configurations with refresh options."
   [("r" "Refresh setup current buffer" org-mode-restart)
    ("e" "Reload Org (after update) (C-c C-x !)" org-reload)
    ("l" "Reload Org uncompiled" org-extra-reload)])
 
 ;;;###autoload (autoload 'org-extra-customize-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-customize-menu ()
-  "Transient menu for Customize commands."
+  "Define a transient menu for Org customization."
   [("b" "Browse Org Group" org-customize)])
 
 ;;;###autoload (autoload 'org-extra-documentation-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-documentation-menu ()
-  "Transient menu for Documentation commands."
+  "Display Org mode version, info docs, or news."
   [("s" "Show Version" org-version)
    ("i" "Info Documentation" org-info)
    ("b" "Browse Org News" org-browse-news)])
 
 ;;;###autoload (autoload 'org-extra-latex-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-latex-menu ()
-  "Transient menu for LaTeX commands."
+  "Toggle Org CDLaTeX mode and insert citations."
   [("o" org-cdlatex-mode
     :description
     (lambda ()
@@ -1430,14 +1470,14 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
 
 ;;;###autoload (autoload 'org-extra-special-views-current-file-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-special-views-current-file-menu ()
-  "Transient menu for Special views current file commands."
+  "Display custom Org mode views for the current file."
   [("t" "TODO Tree" org-show-todo-tree)
    ("c" "Check Deadlines" org-check-deadlines)
    ("a" "Tags/Property tree (C-c \\)" org-match-sparse-tree)])
 
 ;;;###autoload (autoload 'org-extra-file-list-for-agenda-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-file-list-for-agenda-menu ()
-  "Transient menu for File List for Agenda commands."
+  "Define transient menu for managing Org agenda files."
   [("e" "Edit File List" org-edit-agenda-file-list)
    ("a" "Add/Move Current File to Front of List (C-c [)"
     org-agenda-file-to-front)
@@ -1447,7 +1487,7 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
 
 ;;;###autoload
 (defun org-extra-logging-record-done-time ()
-  "Toggle `org-log-done'."
+  "Toggle recording of timestamps for completed tasks."
   (interactive)
   (progn (setq org-log-done (not org-log-done))
          (message "Switching to %s will %s record a timestamp"
@@ -1456,21 +1496,19 @@ Wraps result in LEFT-SEPARATOR and RIGHT-SEPARATOR."
 
 ;;;###autoload
 (defun org-extra-clock-in ()
-  "Offer a list of \ recently clocked tasks to clock into."
+  "Clock in with a universal argument."
   (interactive)
   (org-clock-in '(4)))
 
 ;;;###autoload
 (defun org-extra-clock-in-mark ()
-  "Clock into the current task and mark it as the default task.
-A special task that will always be offered in the
-clocking selection, associated with the letter `d'."
+  "Mark the current heading for clock-in with a specific effort."
   (interactive)
   (org-clock-in '(16)))
 
 ;;;###autoload (autoload 'org-extra-logging-work-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-logging-work-menu ()
-  "Transient menu for Logging work commands."
+  "Display a menu for clocking and logging tasks."
   [("c" "Clock in (C-c C-x TAB)" org-clock-in)
    ("s" "Switch task" org-extra-clock-in)
    ("l" "Clock out (C-c C-x C-o)" org-clock-out)
@@ -1490,7 +1528,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-dates-and-scheduling-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-dates-and-scheduling-menu ()
-  "Transient menu for Dates and Scheduling commands."
+  "Display Org mode date and scheduling options menu."
   [("t" "Timestamp (C-c .)" org-time-stamp :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1535,7 +1573,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-change-date-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-change-date-menu ()
-  "Transient menu for Change Date commands."
+  "Define a transient menu for changing dates in Org mode."
   [("d" "1 Day Later (S-<right>)" org-shiftright :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1555,7 +1593,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-tags-and-properties-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-tags-and-properties-menu ()
-  "Transient menu for TAGS and Properties commands."
+  "Define a transient menu for Org mode tag and property actions."
   [("s" "Set Tags (C-c C-q)" org-set-tags-command :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1575,19 +1613,19 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload
 (defun org-extra-customize-org-enforce-todo-dependencies ()
-  "Customize `org-enforce-todo-dependencies'."
+  "Customize the enforcement of TODO dependencies."
   (interactive)
   (customize-variable 'org-enforce-todo-dependencies))
 
 ;;;###autoload
 (defun org-extra-customize-feed ()
-  "Customize `org-feed-alist'."
+  "Customize the `org-feed-alist' variable."
   (interactive)
   (customize-variable 'org-feed-alist))
 
 ;;;###autoload (autoload 'org-extra-todo-lists-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-todo-lists-menu ()
-  "Transient menu for TODO Lists commands."
+  "Display a menu for extra Org mode TODO list actions."
   [("t" "TODO/DONE/- (C-c C-t)" org-todo :transient t)
    ("s" "Select keyword" org-extra-select-keyword-menu)
    ("h" "Show TODO Tree" org-show-todo-tree :transient t)
@@ -1645,7 +1683,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-select-keyword-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-select-keyword-menu ()
-  "Transient menu for Select keyword commands."
+  "Navigate Org keywords with transient menu options."
   [("n" "Next keyword (S-<right>)" org-shiftright
     :transient t
     :inapt-if-not
@@ -1686,7 +1724,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-hyperlinks-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-hyperlinks-menu ()
-  "Transient menu for Hyperlinks commands."
+  "Define a menu for Org hyperlink actions."
   [("s" "Store Link (Global)" org-store-link)
    ("f" "Find existing link to here" org-occur-link-in-agenda-files)
    ("i" "Insert Link (C-c C-l)" org-insert-link)
@@ -1726,7 +1764,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-archive-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-archive-menu ()
-  "Transient menu for Archive commands."
+  "Display menu for archiving Org mode subtrees."
   [("a" "Archive (default method) (C-c C-x C-a)" org-archive-subtree-default
     :inapt-if-not
     (lambda ()
@@ -1748,13 +1786,13 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload
 (defun org-extra-footnote ()
-  "Offer special org footnote actions."
+  "Invoke org-footnote-action with extra argument."
   (interactive)
   (org-footnote-action t))
 
 ;;;###autoload (autoload 'org-extra-editing-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-editing-menu ()
-  "Transient menu for Editing commands."
+  "Display a menu for extra Org editing actions."
   [("e" "Emphasis... (C-c C-x C-f)" org-emphasize)
    ("a" "Add block structure (C-c C-,)" org-insert-structure-template)
    ("d" "Edit Source Example (C-c ')" org-edit-special)
@@ -1763,7 +1801,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-edit-structure-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-edit-structure-menu ()
-  "Transient menu for Edit Structure commands."
+  "Display menu for editing Org structure."
   [("m" "Move Subtree Up (M-<up>)" org-metaup
     :transient t
     :inapt-if-not
@@ -1822,7 +1860,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-navigate-headings-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-navigate-headings-menu ()
-  "Transient menu for Navigate Headings commands."
+  "Navigate Org headings with transient menu commands."
   [("u" "Up (C-c C-u)" outline-up-heading
     :transient t)
    ("n" "Next (C-c C-n)" outline-next-visible-heading
@@ -1837,7 +1875,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-show-hide-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-show-hide-menu ()
-  "Transient menu for Show/Hide commands."
+  "Toggle visibility options for Org mode elements."
   [("c" "Cycle Visibility (TAB)" org-cycle :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1856,13 +1894,13 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload
 (defun org-extra-babel-menu ()
-  "Remove remove all result blocks in the buffer."
+  "Add extra Babel menu options for result removal."
   (interactive)
   (org-babel-remove-result-one-or-many t))
 
 ;;;###autoload (autoload 'org-extra-menu-babel-transient "org-extra.el" nil t)
 (transient-define-prefix org-extra-menu-babel-transient ()
-  "Command dispatcher for org babel."
+  "Provide Babel source block actions in a transient menu."
   :transient-suffix #'transient--do-call
   :transient-non-suffix #'transient--do-stay
   ["Babel"
@@ -1902,13 +1940,13 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload
 (defun org-extra-table-insert-row-below ()
-  "Insert a new row below the current line into the table."
+  "Insert a new row below the current one in an Org table."
   (interactive)
   (org-table-insert-row t))
 
 ;;;###autoload (autoload 'org-extra-menu-org-table-transient "org-extra.el" nil t)
 (transient-define-prefix org-extra-menu-org-table-transient ()
-  "Command dispatcher for org table."
+  "Add table manipulation options to Org mode."
   :transient-suffix #'transient--do-call
   :transient-non-suffix #'transient--do-stay
   [["Org table"
@@ -1930,7 +1968,7 @@ clocking selection, associated with the letter `d'."
   (if
       (when (fboundp 'org-at-table-p)
         (org-at-table-p))
-      (transient-setup 'org-extra-menu-org-table-transient)
+      (transient-setup #'org-extra-menu-org-table-transient)
     (if
         (when (fboundp 'org-region-active-p)
           (org-region-active-p))
@@ -1957,19 +1995,19 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload
 (defun org-extra-info-timers ()
-  "Read documentation for Org Timers in the info system."
+  "Display \"Timers\" info from Org mode."
   (interactive)
   (org-info "Timers"))
 
 ;;;###autoload
 (defun org-extra-info-clock-commands ()
-  "Read documentation for Org Clocking commands in the info system."
+  "Display clocking commands in Org mode."
   (interactive)
   (org-info "Clocking commands"))
 
 ;;;###autoload (autoload 'org-extra-menu-clock "org-extra.el" nil t)
 (transient-define-prefix org-extra-menu-clock ()
-  "Command dispatcher for org clocks."
+  "Define a transient menu for Org clock and timer actions."
   ["Clock in/out"
    [("i" "Clock in" org-clock-in)
     ("c" "Continiue" org-clock-in-last)
@@ -1997,7 +2035,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload
 (defun org-extra-agenda-archives-files ()
-  "Toggle inclusion of files in trees marked with :ARCHIVE:."
+  "Toggle archive mode for Org agenda files."
   (interactive)
   (require 'org-agenda)
   (when (fboundp 'org-agenda-archives-mode)
@@ -2005,7 +2043,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-agenda-transient "org-extra.el" nil t)
 (transient-define-prefix org-extra-agenda-transient ()
-  "Command dispatcher for agenda mode."
+  "Toggle agenda views and actions with a transient interface."
   [["Headline"
     ("h A" "Archive the entry or subtree"
      org-agenda-archive-default)
@@ -2060,7 +2098,7 @@ clocking selection, associated with the letter `d'."
 
 ;;;###autoload (autoload 'org-extra-toggle-menu "org-extra.el" nil t)
 (transient-define-prefix org-extra-toggle-menu ()
-  "Command dispatcher with org toggle commands."
+  "Toggle various Org mode elements' visibility."
   :transient-suffix #'transient--do-call
   [["Toggle visibility"
     ("i" "Images" org-toggle-inline-images)
@@ -2083,6 +2121,22 @@ clocking selection, associated with the letter `d'."
    ("t" "Timestamp" org-toggle-timestamp-type)
    ("e" "Custom time stamp formats" org-toggle-time-stamp-overlays)
    ("u" "Debugging flags for ‘org-gcal’" org-gcal-toggle-debug)])
+
+(defun org-extra-get-most-long-table-size ()
+  "Calculate the width of the longest Org table."
+  (require 'visual-fill-column nil t)
+  (let ((len))
+    (org-table-map-tables
+     (lambda ()
+       (let ((column-len (progn (goto-char (line-end-position))
+                                (current-column))))
+         (if (not len)
+             (setq len column-len)
+           (if (> column-len len)
+               (setq len column-len))))))
+    len))
+
+
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
