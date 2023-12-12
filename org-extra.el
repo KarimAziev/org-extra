@@ -1944,27 +1944,331 @@ OFF-LABEL. It has no default value."
   (interactive)
   (org-table-insert-row t))
 
+
+(transient-define-prefix org-extra-table-plot-menu ()
+  "Transient menu for Plot commands."
+  ["table -> Plot"
+   [("a" orgtbl-ascii-plot :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Ascii plot"
+         (propertize "Ascii plot" 'face 'transient-inapt-suffix))))
+    ("g" org-plot/gnuplot :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Gnuplot"
+         (propertize "Gnuplot" 'face 'transient-inapt-suffix))))]])
+
+(transient-define-prefix org-extra-table-calculate-menu ()
+  "Transient menu for Calculate commands."
+  ["table -> Calculate"
+   [("=" org-table-eval-formula :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Set Column Formula"
+         (propertize "Set Column Formula" 'face 'transient-inapt-suffix))))
+    ("'" org-edit-special :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Edit Formulas"
+         (propertize "Edit Formulas" 'face 'transient-inapt-suffix))))
+    ""
+    ("r" org-table-recalculate :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Recalculate line"
+         (propertize "Recalculate line" 'face 'transient-inapt-suffix))))
+    ""
+    ("#" org-table-rotate-recalc-marks
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Toggle Recalculate Mark"
+         (propertize "Toggle Recalculate Mark" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ""
+    ("+" org-table-sum :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (or
+              (org-at-table-p)
+              (org-region-active-p)))
+           "Sum Column/Rectangle"
+         (propertize "Sum Column/Rectangle" 'face 'transient-inapt-suffix))))
+    ("w" org-table-current-column :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Which Column?"
+         (propertize "Which Column?" 'face 'transient-inapt-suffix))))]])
+
+(transient-define-prefix org-extra-table-rectangle-menu ()
+  "Transient menu for Rectangle commands."
+  ["table -> Rectangle"
+   [("w" org-copy-special :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Copy Rectangle"
+         (propertize "Copy Rectangle" 'face 'transient-inapt-suffix))))
+    ("c" org-cut-special :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Cut Rectangle"
+         (propertize "Cut Rectangle" 'face 'transient-inapt-suffix))))
+    ("y" org-paste-special
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Paste Rectangle"
+         (propertize "Paste Rectangle" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("f" org-table-wrap-region :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Fill Rectangle"
+         (propertize "Fill Rectangle" 'face 'transient-inapt-suffix))))]])
+
+
+(defun org-extra-post-command-transient ()
+  "Manage transient state after Org mode commands."
+  (cond ((or (not transient--window)
+             (memq this-command '(transient-quit-all transient-quit-one)))
+         (remove-hook 'post-command-hook 'org-extra-post-command-transient t))
+        ((or (memq last-command '(org-table-edit-field))
+             (memq this-command '(org-table-edit-field)))
+         (transient--emergency-exit))
+        ((not (memq this-command '(org-extra-table-rectangle-menu
+                                   org-extra-table-plot-menu
+                                   org-extra-table-calculate-menu)))
+         (and transient-current-command
+              (transient-setup transient-current-command)))))
+
+
+(defun org-extra-get-current-column-name ()
+  "Retrieve the name of the current column in an Org table."
+  (when (org-at-table-p)
+    (when-let ((col (org-table-current-column)))
+      (save-excursion
+        (goto-char (org-table-begin))
+        (when (save-excursion
+                (forward-line 1)
+                (org-at-table-hline-p))
+          (org-table-goto-column col)
+          (org-table-get (org-table-current-line)
+                         (org-table-current-column)))))))
+
 ;;;###autoload (autoload 'org-extra-menu-org-table-transient "org-extra.el" nil t)
 (transient-define-prefix org-extra-menu-org-table-transient ()
   "Add table manipulation options to Org mode."
-  :transient-suffix #'transient--do-call
   :transient-non-suffix #'transient--do-stay
-  [["Org table"
-    ("i" "field info" org-table-field-info)
-    ("RET" "Insert row" org-extra-table-insert-row-below)
-    ("w" "Copy current to value one row below"
-     org-table-copy-down)
-    ("o" "Rotate the recalculation mark in the first column"
-     org-table-rotate-recalc-marks)
-    ("e" "edit field" org-table-edit-field)
-    ("s" "Sum" org-table-sum)
-    ("v" "Eval formula" org-table-eval-formula)
-    ("a" "Create with table el" org-table-create-with-table.el)]
-   [("f" "Toggle the formula debugger in tables"
-     org-table-toggle-formula-debugger)
-    ("t" "Toggle coordinate overlays"
-     org-table-toggle-coordinate-overlays)]]
+  :transient-suffix #'transient--do-call
+  [:if org-at-table-p
+   [:description (lambda ()
+                   (concat
+                    (propertize
+                     "Column "
+                     'face
+                     'transient-heading)
+                    (if-let ((column (or (org-extra-get-current-column-name)
+                                         (org-table-current-column))))
+                        (propertize (format "%s" column) 'face 'transient-value)
+                      "")))
+    :setup-children (lambda (&rest _)
+                      (mapcar
+                       (apply-partially #'transient-parse-suffix
+                                        transient--prefix)
+                       (append
+                        (list ""
+                              '("<left>"  "Move Column Left"
+                                org-table-move-column-left
+                                :transient t
+                                :inapt-if-not (lambda ()
+                                                (and (org-at-table-p)
+                                                 (let
+                                                     ((col
+                                                       (org-table-current-column)))
+                                                   (and col
+                                                    (> col 1))))))
+                              '("<right>" "Move Column Right"
+                                org-table-move-column-right
+                                :inapt-if-not (lambda ()
+                                                (and (org-at-table-p)
+                                                 (let
+                                                     ((col
+                                                       (org-table-current-column)))
+                                                   (and col
+                                                    (>= col 1))))))
+                              '("d" "Delete Column"
+                                org-shiftmetaleft :transient t)
+                              '("w"  "Shrink Column"
+                                org-table-toggle-column-width
+                                :transient t))
+                        (list
+                         ""
+                         "Field"
+                         '("RET" "Next Row" org-return :transient t)
+                         '("TAB" "Next Field" org-cycle)
+                         '("<backtab>"  "Previous Field"
+                           org-shifttab
+                           :transient t)
+                         ""
+                         '("b"  org-table-blank-field
+                           :description (lambda ()
+                                          (concat "Blank Field "
+                                           (or
+                                            (ignore-errors
+                                              (truncate-string-to-width
+                                               (string-trim
+                                                (org-table-get-field
+                                                 (org-table-current-column)))
+                                               20
+                                               nil
+                                               (string-to-char "\s")
+                                               t))
+                                            ""))))
+                         '("`" org-table-edit-field :description
+                           (lambda ()
+                             (if
+                                 (ignore-errors
+                                   (org-at-table-p))
+                                 "Edit Field"
+                               (propertize "Edit Field" 'face
+                                'transient-inapt-suffix))))
+                         '("V" org-table-copy-down
+                           :description
+                           (lambda ()
+                             (if
+                                 (ignore-errors
+                                   (org-at-table-p))
+                                 "Copy Field from Above"
+                               (propertize "Copy Field from Above" 'face
+                                'transient-inapt-suffix))))
+                         ""
+                         "Sort")
+                        (mapcan
+                         (lambda (it)
+                           (let* ((key (substring-no-properties it 0 1))
+                                  (upcased-key (upcase key)))
+                             (list (list key it
+                                         `(lambda (&optional with-case)
+                                            (interactive
+                                             (list current-prefix-arg))
+                                            (let ((char ,(string-to-char
+                                                          key)))
+                                             (funcall
+                                              #'org-table-sort-lines
+                                              with-case
+                                              char))))
+                                   (list upcased-key
+                                         (format "%s (reversed)" (capitalize
+                                                                  it))
+                                         `(lambda (&optional with-case)
+                                            (interactive
+                                             (list
+                                              current-prefix-arg))
+                                            (let ((char ,(string-to-char
+                                                          upcased-key)))
+                                             (funcall
+                                              #'org-table-sort-lines
+                                              with-case
+                                              char)))))))
+                         (list "alphabetic" "numeric" "time" "func")))))]
+   [:description (lambda ()
+                   (format "Row %s" (org-table-current-line)))
+    ("M-<up>" "Move Row Up" org-metaup)
+    ("M-<down>" "Move Row Down" org-metadown)
+    ("D" "Delete Row" org-shiftmetaup)
+    ("s" "Sort lines in region" org-table-sort-lines)
+    ""
+    "Insert"
+    ("i" "Column" org-shiftmetaright
+     :transient t)
+    ("h" "Header line" org-ctrl-c-minus :transient t)
+    ("C-<return>"  "Row" org-shiftmetadown)
+    ""
+    "Toggle"
+    ("}" org-table-toggle-coordinate-overlays
+     :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Show Col/Row Numbers"
+                                               (bound-and-true-p
+                                                org-table-overlay-coordinates)
+                                               "+" " " " [" "] ")))
+    ("{" org-table-toggle-formula-debugger
+     :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Debug Formulas"
+                                               (bound-and-true-p
+                                                org-table-formula-debug)
+                                               "+" " " " [" "] ")))
+    ("C" "Calculate" org-extra-table-calculate-menu)
+    ("R" "Rectangle" org-extra-table-rectangle-menu
+     :transient nil)
+    ""
+    ("e" org-table-create :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (not
+              (org-at-table-p)))
+           "Create"
+         (propertize "Create" 'face 'transient-inapt-suffix))))
+    ("O" org-table-convert-region :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (not
+              (org-at-table-p 'any)))
+           "Convert Region"
+         (propertize "Convert Region" 'face 'transient-inapt-suffix))))
+    ("I" org-table-import :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (not
+              (org-at-table-p)))
+           "Import from File"
+         (propertize "Import from File" 'face 'transient-inapt-suffix))))
+    ("E" org-table-export :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Export to File"
+         (propertize "Export to File" 'face 'transient-inapt-suffix))))
+    ("T" "Transpose table" org-table-transpose-table-at-point)
+    ""
+    ("~" "Create/Convert from/to table.el" org-table-create-with-table.el)
+    ("P" "Plot" org-extra-table-plot-menu :transient nil)
+    ""
+    ("q" "Quit" transient-quit-all)]]
   (interactive)
+  (require 'org)
+  (require 'org-table)
+  (add-hook 'post-command-hook
+            'org-extra-post-command-transient nil t)
   (if
       (when (fboundp 'org-at-table-p)
         (org-at-table-p))
