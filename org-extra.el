@@ -118,23 +118,8 @@
       1 'org-extra-checkbox-done-text prepend))
    'append))
 
-(defvar org-extra-straight-dir-mod-time nil
-  "Last modification time of straight repos directory.")
-
-(defvar org-extra-ob-packages-cached nil
-  "List of cached file name bases with trimmed ob-prefix.")
-
 (defvar org-src-lang-modes)
 (defvar org-babel-load-languages)
-
-(defun org-extra-babel-default-loadable-languages ()
-  "Return list of options from variable `org-babel-load-languages'."
-  (mapcar (lambda (it)
-            (car (last it)))
-          (cdr (plist-get (cdr (get
-                                'org-babel-load-languages
-                                'custom-type))
-                          :key-type))))
 
 (defun org-extra-ob-packages ()
   "List all `org-babel' languages in `features' excluding core and autoloads."
@@ -563,7 +548,10 @@ except that ] is never special and \ quotes ^, - or \ (but
     (nreverse result)))
 
 (defun org-extra-substitute-get-vars (str)
-  "Substitute STR with variable values in BUFF."
+  "Extract and display buffer-local variables from string STR.
+
+Argument STR is a string containing the text to be processed for variable
+substitution."
   (let ((buff (current-buffer)))
     (with-temp-buffer
       (save-excursion
@@ -988,13 +976,6 @@ Beginning and end is bounds of inner content. For example: (example 4292 4486)."
                   (list (downcase structure-type)
                         (point)
                         end))))))))))
-
-(defun org-extra-overlay-flash-region (start end &optional face timeout)
-  "Temporarily highlight region from START to END with FACE.
-Default value of TIMEOUT is 0.2 seconds."
-  (let ((overlay (make-overlay start end)))
-    (overlay-put overlay 'face (or face 'diary))
-    (run-with-timer (or timeout 0.2) nil #'delete-overlay overlay)))
 
 (defun org-extra-overlay-prompt-region (beg end fn &rest args)
   "Highlight region from BEG to END while invoking FN with ARGS."
@@ -1786,7 +1767,7 @@ OFF-LABEL. It has no default value."
 
 ;;;###autoload
 (defun org-extra-footnote ()
-  "Invoke org-footnote-action with extra argument."
+  "Invoke `org-footnote-action' with extra argument."
   (interactive)
   (org-footnote-action t))
 
@@ -1893,7 +1874,7 @@ OFF-LABEL. It has no default value."
    ("u" "Subtree to indirect buffer (C-c C-x b)" org-tree-to-indirect-buffer)])
 
 ;;;###autoload
-(defun org-extra-babel-menu ()
+(defun org-extra-remove-all-results ()
   "Add extra Babel menu options for result removal."
   (interactive)
   (org-babel-remove-result-one-or-many t))
@@ -1917,7 +1898,7 @@ OFF-LABEL. It has no default value."
     ("e" "Wrap or split" org-babel-demarcate-block)]
    ["Result"
     ("k" "remove current" org-babel-remove-result-one-or-many)
-    ("D" "remove all" org-extra-babel-menu)
+    ("D" "remove all" org-extra-remove-all-results)
     ("o" "open src block result" org-babel-open-src-block-result)
     ("a" "Generate a sha1" org-babel-sha1-hash)]]
   [["Execute"
@@ -2428,7 +2409,6 @@ OFF-LABEL. It has no default value."
 
 (defun org-extra-get-most-long-table-size ()
   "Calculate the width of the longest Org table."
-  (require 'visual-fill-column nil t)
   (let ((len))
     (org-table-map-tables
      (lambda ()
