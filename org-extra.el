@@ -45,6 +45,10 @@
 (require 'transient)
 
 (defvar org-src-block-faces)
+(defvar org-archive-default-command)
+
+(defvar org-columns-current-fmt)
+(declare-function org-columns-quit "org-colview")
 
 (defconst org-extra-preview-data-root
   (file-name-directory (if (bound-and-true-p load-file-name) load-file-name
@@ -1358,7 +1362,7 @@ Optional argument RIGHT-SEPARATOR is a string placed after the ON-LABEL or
 OFF-LABEL. It has no default value."
   (let* ((description (or description ""))
          (align (apply #'max (list (+ 5 (length description))
-                                   45))))
+                                   30))))
     (concat
      (or description "")
      (propertize " " 'display (list 'space :align-to align))
@@ -1374,30 +1378,6 @@ OFF-LABEL. It has no default value."
         'transient-inactive-value))
      (or right-separator ""))))
 
-;;;###autoload (autoload 'org-extra-org-mode-menu "org-extra.el" nil t)
-(transient-define-prefix org-extra-org-mode-menu ()
-  "Define a menu for Org mode with various actions."
-  [("s" "Show/Hide" org-extra-show-hide-menu)
-   ("n" "New Heading" org-insert-heading)
-   ("a" "Navigate Headings" org-extra-navigate-headings-menu)
-   ("e" "Edit Structure" org-extra-edit-structure-menu)
-   ("d" "Editing" org-extra-editing-menu)
-   ("r" "Archive" org-extra-archive-menu)
-   ("h" "Hyperlinks" org-extra-hyperlinks-menu)
-   ("t" "TODO Lists" org-extra-todo-lists-menu)
-   ("g" "TAGS and Properties" org-extra-tags-and-properties-menu)
-   ("c" "Dates and Scheduling" org-extra-dates-and-scheduling-menu)
-   ("l" "Logging work" org-extra-logging-work-menu)
-   ("o" "Agenda Command... (C-c A)" org-agenda)
-   ("i" "Set Restriction Lock (C-c C-x <)" org-agenda-set-restriction-lock)
-   ("f" "File List for Agenda" org-extra-file-list-for-agenda-menu)
-   ("p" "Special views current file" org-extra-special-views-current-file-menu)
-   ("x" "Export/Publish... (C-c C-e)" org-export-dispatch)
-   ("b" "LaTeX" org-extra-latex-menu)
-   ("u" "Documentation" org-extra-documentation-menu)
-   ("m" "Customize" org-extra-customize-menu)
-   ("j" "Send bug report" org-submit-bug-report)
-   ("k" "Refresh/Reload" org-extra-refresh-reload-menu)])
 
 ;;;###autoload
 (defun org-extra-reload ()
@@ -1405,26 +1385,26 @@ OFF-LABEL. It has no default value."
   (interactive)
   (org-reload t))
 
-;;;###autoload (autoload 'org-extra-refresh-reload-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-refresh-reload-menu "org-extra" nil t)
 (transient-define-prefix org-extra-refresh-reload-menu ()
   "Reload Org configurations with refresh options."
   [("r" "Refresh setup current buffer" org-mode-restart)
    ("e" "Reload Org (after update) (C-c C-x !)" org-reload)
    ("l" "Reload Org uncompiled" org-extra-reload)])
 
-;;;###autoload (autoload 'org-extra-customize-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-customize-menu "org-extra" nil t)
 (transient-define-prefix org-extra-customize-menu ()
   "Define a transient menu for Org customization."
   [("b" "Browse Org Group" org-customize)])
 
-;;;###autoload (autoload 'org-extra-documentation-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-documentation-menu "org-extra" nil t)
 (transient-define-prefix org-extra-documentation-menu ()
   "Display Org mode version, info docs, or news."
   [("s" "Show Version" org-version)
    ("i" "Info Documentation" org-info)
    ("b" "Browse Org News" org-browse-news)])
 
-;;;###autoload (autoload 'org-extra-latex-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-latex-menu "org-extra" nil t)
 (transient-define-prefix org-extra-latex-menu ()
   "Toggle Org CDLaTeX mode and insert citations."
   [("o" org-cdlatex-mode
@@ -1449,14 +1429,14 @@ OFF-LABEL. It has no default value."
         (org-inside-LaTeX-fragment-p))))
    ("s" "Insert citation (C-c C-x [)" org-reftex-citation)])
 
-;;;###autoload (autoload 'org-extra-special-views-current-file-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-special-views-current-file-menu "org-extra" nil t)
 (transient-define-prefix org-extra-special-views-current-file-menu ()
   "Display custom Org mode views for the current file."
   [("t" "TODO Tree" org-show-todo-tree)
    ("c" "Check Deadlines" org-check-deadlines)
    ("a" "Tags/Property tree (C-c \\)" org-match-sparse-tree)])
 
-;;;###autoload (autoload 'org-extra-file-list-for-agenda-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-file-list-for-agenda-menu "org-extra" nil t)
 (transient-define-prefix org-extra-file-list-for-agenda-menu ()
   "Define transient menu for managing Org agenda files."
   [("e" "Edit File List" org-edit-agenda-file-list)
@@ -1487,18 +1467,20 @@ OFF-LABEL. It has no default value."
   (interactive)
   (org-clock-in '(16)))
 
-;;;###autoload (autoload 'org-extra-logging-work-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-logging-work-menu "org-extra" nil t)
 (transient-define-prefix org-extra-logging-work-menu ()
   "Display a menu for clocking and logging tasks."
-  [("c" "Clock in (C-c C-x TAB)" org-clock-in)
+  :refresh-suffixes t
+  [("i" "Clock in" org-clock-in)
    ("s" "Switch task" org-extra-clock-in)
-   ("l" "Clock out (C-c C-x C-o)" org-clock-out)
-   ("o" "Clock cancel (C-c C-x C-q)" org-clock-cancel)
+   ("o" "Clock out" org-clock-out)
+   ""
+   ("C" "Clock cancel" org-clock-cancel)
    ("m" "Mark as default task" org-clock-mark-default-task)
    ("k" "Clock in, mark as default" org-extra-clock-in-mark)
-   ("g" "Goto running clock (C-c C-x C-j)" org-clock-goto)
-   ("d" "Display times (C-c C-x C-d)" org-clock-display)
-   ("r" "Create clock table" org-clock-report)
+   ("j" "Goto running clock" org-clock-goto)
+   ""
+   ("d" "Display times" org-clock-display)
    ("e" org-extra-logging-record-done-time
     :description
     (lambda ()
@@ -1507,7 +1489,7 @@ OFF-LABEL. It has no default value."
                                               "[" "]"))
     :transient t)])
 
-;;;###autoload (autoload 'org-extra-dates-and-scheduling-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-dates-and-scheduling-menu "org-extra" nil t)
 (transient-define-prefix org-extra-dates-and-scheduling-menu ()
   "Display Org mode date and scheduling options menu."
   [("t" "Timestamp (C-c .)" org-time-stamp :inapt-if-not
@@ -1552,9 +1534,10 @@ OFF-LABEL. It has no default value."
    ("n" "Insert Timer String (C-c C-x .)" org-timer)
    ("e" "Insert Timer Item (C-c C-x -)" org-timer-item)])
 
-;;;###autoload (autoload 'org-extra-change-date-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-change-date-menu "org-extra" nil t)
 (transient-define-prefix org-extra-change-date-menu ()
   "Define a transient menu for changing dates in Org mode."
+    :refresh-suffixes t
   [("d" "1 Day Later (S-<right>)" org-shiftright :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1572,9 +1555,10 @@ OFF-LABEL. It has no default value."
       (ignore-errors
         (org-at-timestamp-p 'lax))))])
 
-;;;###autoload (autoload 'org-extra-tags-and-properties-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-tags-and-properties-menu "org-extra" nil t)
 (transient-define-prefix org-extra-tags-and-properties-menu ()
   "Define a transient menu for Org mode tag and property actions."
+  :refresh-suffixes t
   [("s" "Set Tags (C-c C-q)" org-set-tags-command :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1589,8 +1573,14 @@ OFF-LABEL. It has no default value."
       (ignore-errors
         (not
          (org-before-first-heading-p)))))
-   ("o" "Column view of properties (C-c C-x C-c)" org-columns)
-   ("i" "Insert Column View DBlock" org-columns-insert-dblock)])
+   ("P" "Set property and value" org-set-property-and-value)
+   ("o" org-extra-columns-toggle :description
+    (lambda ()
+      (org-extra--bar-make-toggle-description "Column view of properties"
+                                              org-columns-current-fmt "+"
+                                              "" "[" "]")))
+   ("i" "Insert Column View DBlock" org-columns-insert-dblock)
+   ("C-u" "dblock-update" org-dblock-update)])
 
 ;;;###autoload
 (defun org-extra-customize-org-enforce-todo-dependencies ()
@@ -1604,9 +1594,10 @@ OFF-LABEL. It has no default value."
   (interactive)
   (customize-variable 'org-feed-alist))
 
-;;;###autoload (autoload 'org-extra-todo-lists-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-todo-lists-menu "org-extra" nil t)
 (transient-define-prefix org-extra-todo-lists-menu ()
   "Display a menu for extra Org mode TODO list actions."
+  :refresh-suffixes t
   [("t" "TODO/DONE/- (C-c C-t)" org-todo :transient t)
    ("s" "Select keyword" org-extra-select-keyword-menu)
    ("h" "Show TODO Tree" org-show-todo-tree :transient t)
@@ -1662,7 +1653,7 @@ OFF-LABEL. It has no default value."
    ("b" "Go to the inbox of a feed... (C-c C-x G)" org-feed-goto-inbox)
    ("c" "Customize feeds" org-extra-customize-feed)])
 
-;;;###autoload (autoload 'org-extra-select-keyword-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-select-keyword-menu "org-extra" nil t)
 (transient-define-prefix org-extra-select-keyword-menu ()
   "Navigate Org keywords with transient menu options."
   [("n" "Next keyword (S-<right>)" org-shiftright
@@ -1703,9 +1694,10 @@ OFF-LABEL. It has no default value."
           1)
          (org-at-heading-p)))))])
 
-;;;###autoload (autoload 'org-extra-hyperlinks-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-hyperlinks-menu "org-extra" nil t)
 (transient-define-prefix org-extra-hyperlinks-menu ()
   "Define a menu for Org hyperlink actions."
+  :refresh-suffixes t
   [("s" "Store Link (Global)" org-store-link)
    ("f" "Find existing link to here" org-occur-link-in-agenda-files)
    ("i" "Insert Link (C-c C-l)" org-insert-link)
@@ -1731,7 +1723,7 @@ OFF-LABEL. It has no default value."
     (lambda ()
       (org-extra--bar-make-toggle-description "Literal Links"
                                               (not
-                                               org-descriptive-links)
+                                               org-link-descriptive)
                                               "*" ""
                                               "(" ")"))
     :description
@@ -1743,27 +1735,7 @@ OFF-LABEL. It has no default value."
                                               "(" ")"))
     :transient t)])
 
-;;;###autoload (autoload 'org-extra-archive-menu "org-extra.el" nil t)
-(transient-define-prefix org-extra-archive-menu ()
-  "Display menu for archiving Org mode subtrees."
-  [("a" "Archive (default method) (C-c C-x C-a)" org-archive-subtree-default
-    :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))
-   ("m" "Move Subtree to Archive file (C-c $)" org-archive-subtree :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))
-   ("t" "Toggle ARCHIVE tag (C-c C-x a)" org-toggle-archive-tag :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))
-   ("o" "Move subtree to Archive sibling (C-c C-x A)"
-    org-archive-to-archive-sibling :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))])
+
 
 ;;;###autoload
 (defun org-extra-footnote ()
@@ -1771,7 +1743,7 @@ OFF-LABEL. It has no default value."
   (interactive)
   (org-footnote-action t))
 
-;;;###autoload (autoload 'org-extra-editing-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-editing-menu "org-extra" nil t)
 (transient-define-prefix org-extra-editing-menu ()
   "Display a menu for extra Org editing actions."
   [("e" "Emphasis... (C-c C-x C-f)" org-emphasize)
@@ -1780,9 +1752,10 @@ OFF-LABEL. It has no default value."
    ("f" "Footnote new/jump (C-c C-x f)" org-footnote-action)
    ("o" "Footnote extra" org-extra-footnote)])
 
-;;;###autoload (autoload 'org-extra-edit-structure-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-edit-structure-menu "org-extra" nil t)
 (transient-define-prefix org-extra-edit-structure-menu ()
   "Display menu for editing Org structure."
+  :refresh-suffixes t
   [("m" "Move Subtree Up (M-<up>)" org-metaup
     :transient t
     :inapt-if-not
@@ -1839,22 +1812,25 @@ OFF-LABEL. It has no default value."
       (ignore-errors
         (org-in-subtree-not-table-p))))])
 
-;;;###autoload (autoload 'org-extra-navigate-headings-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-navigate-headings-menu "org-extra" nil t)
 (transient-define-prefix org-extra-navigate-headings-menu ()
   "Navigate Org headings with transient menu commands."
-  [("u" "Up (C-c C-u)" outline-up-heading
+  :transient-suffix #'transient--do-call
+  :refresh-suffixes t
+  :transient-non-suffix #'transient--do-stay
+  [("u" "Up" outline-up-heading
     :transient t)
-   ("n" "Next (C-c C-n)" outline-next-visible-heading
+   ("n" "Next" outline-next-visible-heading
     :transient t)
-   ("p" "Previous (C-c C-p)" outline-previous-visible-heading
+   ("p" "Previous" outline-previous-visible-heading
     :transient t)
-   ("e" "Next Same Level (C-c C-f)" outline-forward-same-level
+   ("e" "Next Same Level" outline-forward-same-level
     :transient t)
-   ("r" "Previous Same Level (C-c C-b)" outline-backward-same-level
+   ("r" "Previous Same Level" outline-backward-same-level
     :transient t)
-   ("j" "Jump (C-c C-j)" org-goto)])
+   ("j" "Jump" org-goto)])
 
-;;;###autoload (autoload 'org-extra-show-hide-menu "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-show-hide-menu "org-extra" nil t)
 (transient-define-prefix org-extra-show-hide-menu ()
   "Toggle visibility options for Org mode elements."
   [("c" "Cycle Visibility (TAB)" org-cycle :inapt-if-not
@@ -1879,10 +1855,11 @@ OFF-LABEL. It has no default value."
   (interactive)
   (org-babel-remove-result-one-or-many t))
 
-;;;###autoload (autoload 'org-extra-menu-babel-transient "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-menu-babel-transient "org-extra" nil t)
 (transient-define-prefix org-extra-menu-babel-transient ()
   "Provide Babel source block actions in a transient menu."
   :transient-suffix #'transient--do-call
+  :refresh-suffixes t
   :transient-non-suffix #'transient--do-stay
   ["Babel"
    ["Go"
@@ -1926,6 +1903,7 @@ OFF-LABEL. It has no default value."
   (org-table-insert-row t))
 
 
+;;;###autoload (autoload 'org-extra-table-plot-menu "org-extra" nil t)
 (transient-define-prefix org-extra-table-plot-menu ()
   "Transient menu for Plot commands."
   ["table -> Plot"
@@ -1944,6 +1922,7 @@ OFF-LABEL. It has no default value."
            "Gnuplot"
          (propertize "Gnuplot" 'face 'transient-inapt-suffix))))]])
 
+;;;###autoload (autoload 'org-extra-table-calculate-menu "org-extra" nil t)
 (transient-define-prefix org-extra-table-calculate-menu ()
   "Transient menu for Calculate commands."
   ["table -> Calculate"
@@ -1997,6 +1976,7 @@ OFF-LABEL. It has no default value."
            "Which Column?"
          (propertize "Which Column?" 'face 'transient-inapt-suffix))))]])
 
+;;;###autoload (autoload 'org-extra-table-rectangle-menu "org-extra" nil t)
 (transient-define-prefix org-extra-table-rectangle-menu ()
   "Transient menu for Rectangle commands."
   ["table -> Rectangle"
@@ -2036,7 +2016,7 @@ OFF-LABEL. It has no default value."
   "Manage transient state after Org mode commands."
   (cond ((or (not transient--window)
              (memq this-command '(transient-quit-all transient-quit-one)))
-         (remove-hook 'post-command-hook 'org-extra-post-command-transient t))
+         (remove-hook 'post-command-hook #'org-extra-post-command-transient t))
         ((or (memq last-command '(org-table-edit-field))
              (memq this-command '(org-table-edit-field)))
          (transient--emergency-exit))
@@ -2060,11 +2040,12 @@ OFF-LABEL. It has no default value."
           (org-table-get (org-table-current-line)
                          (org-table-current-column)))))))
 
-;;;###autoload (autoload 'org-extra-menu-org-table-transient "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-menu-org-table-transient "org-extra" nil t)
 (transient-define-prefix org-extra-menu-org-table-transient ()
   "Add table manipulation options to Org mode."
   :transient-non-suffix #'transient--do-stay
   :transient-suffix #'transient--do-call
+  :refresh-suffixes t
   [:if org-at-table-p
    [:description (lambda ()
                    (concat
@@ -2248,8 +2229,6 @@ OFF-LABEL. It has no default value."
   (interactive)
   (require 'org)
   (require 'org-table)
-  (add-hook 'post-command-hook
-            'org-extra-post-command-transient nil t)
   (if
       (when (fboundp 'org-at-table-p)
         (org-at-table-p))
@@ -2290,33 +2269,7 @@ OFF-LABEL. It has no default value."
   (interactive)
   (org-info "Clocking commands"))
 
-;;;###autoload (autoload 'org-extra-menu-clock "org-extra.el" nil t)
-(transient-define-prefix org-extra-menu-clock ()
-  "Define a transient menu for Org clock and timer actions."
-  ["Clock in/out"
-   [("i" "Clock in" org-clock-in)
-    ("c" "Continiue" org-clock-in-last)
-    ("o" "Out" org-clock-out)
-    ("q" "Cancel" org-clock-cancel)
-    ("e" "Change effort" org-clock-modify-effort-estimate)]
-   ["Summary"
-    ("g" "Goto " org-clock-goto)
-    ("d" "Show subtree timers" org-clock-display)
-    ("r" "Report" org-clock-report)]
-   ["Help"
-    ("z" "Info about Timers" org-extra-info-timers)
-    ("?" "Show info" org-extra-info-clock-commands)]]
-  [["Timer"
-    ("t" "Insert" org-timer-start)
-    ("n" "Set" org-timer-set-timer)
-    ("p" "Pause or continue" org-timer-pause-or-continue)
-    ("s" "Stop" org-timer-stop)]
-   ["Insert"
-    ("m" "Insert time from timer" org-timer)
-    ("I"
-     "Insert a description-type item with the current timer value"
-     org-timer-item)
-    ("h" "Schedule" org-schedule)]])
+
 
 ;;;###autoload
 (defun org-extra-agenda-archives-files ()
@@ -2326,7 +2279,7 @@ OFF-LABEL. It has no default value."
   (when (fboundp 'org-agenda-archives-mode)
     (org-agenda-archives-mode 'files)))
 
-;;;###autoload (autoload 'org-extra-agenda-transient "org-extra.el" nil t)
+;;;###autoload (autoload 'org-extra-agenda-transient "org-extra" nil t)
 (transient-define-prefix org-extra-agenda-transient ()
   "Toggle agenda views and actions with a transient interface."
   [["Headline"
@@ -2381,31 +2334,6 @@ OFF-LABEL. It has no default value."
     ("." "Go to today" org-agenda-goto-today)
     ("g r" "Rebuild views " org-agenda-redo)]])
 
-;;;###autoload (autoload 'org-extra-toggle-menu "org-extra.el" nil t)
-(transient-define-prefix org-extra-toggle-menu ()
-  "Toggle various Org mode elements' visibility."
-  :transient-suffix #'transient--do-call
-  [["Toggle visibility"
-    ("i" "Images" org-toggle-inline-images)
-    ("b" "Block" org-hide-block-toggle)
-    ("d" "Drawer" org-hide-drawer-toggle)
-    ("C" "Custom properties" org-toggle-custom-properties-visibility)
-    ("l" "Links" org-toggle-link-display)
-    ("E" "Entities" org-toggle-pretty-entities)]
-   ["Toggle buttons"
-    ("c" "Comment" org-toggle-comment)
-    ("x" "Checkbox" org-toggle-checkbox)
-    ("r" "Radio" org-toggle-radio-button)
-    ("a" "Archive tag" org-toggle-archive-tag)]]
-  ["Toggle headings"
-   ("H" "Headings => normal lines => list"
-    org-toggle-item)
-   ("h" "Headings => normal text" org-toggle-heading)]
-  [("w" "Fixed-width markup" org-toggle-fixed-width)
-   ("g" "Group tags" org-toggle-tags-groups)
-   ("t" "Timestamp" org-toggle-timestamp-type)
-   ("e" "Custom time stamp formats" org-toggle-time-stamp-overlays)
-   ("u" "Debugging flags for ‘org-gcal’" org-gcal-toggle-debug)])
 
 (defun org-extra-get-most-long-table-size ()
   "Calculate the width of the longest Org table."
@@ -2419,6 +2347,733 @@ OFF-LABEL. It has no default value."
            (if (> column-len len)
                (setq len column-len))))))
     len))
+
+(defun org-extra--checkbox-toggable-p ()
+  "Check if a checkbox can be toggled."
+  (or (org-at-radio-list-p)
+      (org-at-item-p)
+      (save-excursion
+        (cond ((org-region-active-p)
+               (let ((limit (region-end)))
+                 (goto-char (region-beginning))
+                 (org-list-search-forward (org-item-beginning-re)
+                                          limit t)))
+              ((org-at-heading-p)
+               (let ((limit (save-excursion
+                              (outline-next-heading)
+                              (point))))
+                 (org-end-of-meta-data t)
+                 (org-list-search-forward (org-item-beginning-re)
+                                          limit t)))
+              ((org-at-item-p))))))
+
+;;;###autoload (autoload 'org-extra-toggle-menu "org-extra" nil t)
+(transient-define-prefix org-extra-toggle-menu ()
+  "Toggle various Org mode elements' visibility."
+  :transient-suffix #'transient--do-call
+  :transient-non-suffix #'transient--do-stay
+  :refresh-suffixes t
+  [["Toggle visibility"
+    ("i" "Images" org-toggle-inline-images)
+    ("I" "Redisplay Inline images" org-redisplay-inline-images)
+    ("b" "Block" org-fold-hide-block-toggle)
+    ("d" "Drawer" org-fold-hide-drawer-toggle)
+    ("C" "Custom properties" org-toggle-custom-properties-visibility)
+    ("l" org-toggle-link-display :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Links"
+                                               org-link-descriptive)))
+    ("E"  org-toggle-pretty-entities
+     :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Entities"
+                                               org-pretty-entities
+                                               "UTF8"
+                                               "plain text")))]
+   ["Toggle buttons"
+    ("c" "Comment" org-toggle-comment)
+    ("x" "Checkbox" org-toggle-checkbox :inapt-if-not
+     org-extra--checkbox-toggable-p)
+    ("r" "Radio" org-toggle-radio-button :inapt-if-not org-at-item-p)
+    ("a" "Archive tag" org-toggle-archive-tag :transient nil)]]
+  ["Toggle headings"
+   ("H" "Headings => normal lines => list" org-toggle-item)
+   ("h" "Headings => normal text" org-toggle-heading)]
+  [("w" "Fixed-width markup" org-toggle-fixed-width)
+   ("g" "Group tags" org-toggle-tags-groups)
+   ("o" "Ordered property" org-toggle-ordered-property)
+   ("t" "Timestamp" org-toggle-timestamp-type)
+   ("e" "Custom time stamp formats" org-toggle-time-stamp-overlays)
+   ("u" "Debugging flags for ‘org-gcal’" org-gcal-toggle-debug)])
+
+;;;###autoload (autoload 'org-extra-menu-clock "org-extra" nil t)
+(transient-define-prefix org-extra-menu-clock ()
+  "Define a transient menu for Org clock and timer actions."
+  ["Clock in/out"
+   [("i" "Clock in" org-clock-in)
+    ("c" "Continiue" org-clock-in-last)
+    ("o" "Out" org-clock-out)
+    ("q" "Cancel" org-clock-cancel)
+    ("e" "Change effort" org-clock-modify-effort-estimate)
+    ("C-z" "resolve-clocks" org-resolve-clocks)]
+   ["Summary"
+    ("g" "Goto " org-clock-goto)
+    ("d" "Show subtree timers" org-clock-display)
+    ("r" "Report" org-clock-report)]
+   ["Help"
+    ("z" "Info about Timers" org-extra-info-timers)
+    ("?" "Show info" org-extra-info-clock-commands)]]
+  [["Timer"
+    ("t" "Insert" org-timer-start)
+    ("n" "Set" org-timer-set-timer)
+    ("p" "Pause or continue" org-timer-pause-or-continue)
+    ("s" "Stop" org-timer-stop)]
+   ["Insert"
+    ("m" "Insert time from timer" org-timer)
+    ("I"
+     "Insert a description-type item with the current timer value"
+     org-timer-item)
+    ("h" "Schedule" org-schedule)]])
+
+(defun org-extra-columns-toggle ()
+  "Toggle display of columns in Org mode."
+  (interactive)
+  (if org-columns-current-fmt
+      (org-columns-quit)
+    (org-columns)))
+
+;;;###autoload (autoload 'org-extra-menu-archive "org-extra" nil t)
+(transient-define-prefix org-extra-menu-archive ()
+  "Display menu for archiving Org mode subtrees."
+  :refresh-suffixes t
+  [("a" org-archive-subtree-default
+    :description (lambda ()
+                   (format "Archive (default method %s)"
+                           org-archive-default-command))
+    :inapt-if-not
+    (lambda ()
+      (ignore-errors
+        (org-in-subtree-not-table-p))))
+   ""
+   ("m" "Move Subtree to Archive file" org-archive-subtree :inapt-if-not
+    (lambda ()
+      (ignore-errors
+        (org-in-subtree-not-table-p))))
+   ("t" "Toggle ARCHIVE tag" org-toggle-archive-tag :inapt-if-not
+    (lambda ()
+      (ignore-errors
+        (org-in-subtree-not-table-p)))
+    :transient t)
+   ("o" "Move subtree to Archive sibling"
+    org-archive-to-archive-sibling :inapt-if-not
+    (lambda ()
+      (ignore-errors
+        (org-in-subtree-not-table-p))))])
+
+
+
+
+(transient-define-prefix org-extra-menu-customize ()
+   "Transient menu for Customize commands." :refresh-suffixes t
+  ["org -> Customize"
+   [("b" "Browse Org Group" org-customize)
+    ""
+    ("e" "Expand This Menu" org-create-customize-menu)]])
+
+
+(transient-define-prefix org-extra-menu-documentation ()
+   "Transient menu for Documentation commands." :refresh-suffixes t
+  ["org -> Documentation"
+   [("s" "Show Version" org-version)
+    ("i" "Info Documentation" org-info)
+    ("b" "Browse Org News" org-browse-news)]])
+
+
+(transient-define-prefix org-extra-menu-latex ()
+  "Transient menu for LaTeX commands."
+  :refresh-suffixes t
+  ["org -> LaTeX"
+   [("o" org-cdlatex-mode
+     :description
+     (lambda ()
+       (let ((descr
+              (org-extra--bar-make-toggle-description "Org CDLaTeX mode"
+                                                      org-cdlatex-mode "+" " " "[" "]")))
+         (if
+             (ignore-errors
+               (require 'cdlatex nil t))
+             descr
+           (propertize descr 'face 'transient-inapt-suffix))))
+     :transient t)
+    nil nil
+    ("m" org-cdlatex-math-modify :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-inside-LaTeX-fragment-p))
+           "Modify math symbol"
+         (propertize "Modify math symbol" 'face 'transient-inapt-suffix))))
+    ("i" "Insert citation" org-reftex-citation)]])
+
+
+(transient-define-prefix org-extra-menu-specialviewscurrentfile ()
+   "Transient menu for Special views current file commands." :refresh-suffixes t
+  ["org -> Special views current file"
+   [("t" "TODO Tree" org-show-todo-tree)
+    ("c" "Check Deadlines" org-check-deadlines)
+    ("\\" "Tags/Property tree" org-match-sparse-tree)]])
+
+
+(transient-define-prefix org-extra-menu-filelistforagenda ()
+  "Transient menu for File List for Agenda commands."
+  :refresh-suffixes t
+  ["org -> File List for Agenda"
+   [("e" "Edit File List" org-edit-agenda-file-list)
+    ("[" "Add/Move Current File to Front of List" org-agenda-file-to-front)
+    ("]" "Remove Current File from List" org-remove-file)
+    ("c" "Cycle through agenda files" org-cycle-agenda-files :transient t)
+    ("o" "Occur in all agenda files" org-occur-in-agenda-files)]])
+
+
+
+(transient-define-prefix org-extra-menu-datesandscheduling ()
+   "Transient menu for Dates and Scheduling commands." :refresh-suffixes t
+  ["org -> Dates and Scheduling"
+   [("." org-timestamp :description
+     (lambda () 			 (if
+           (ignore-errors
+             (not
+              (org-before-first-heading-p)))
+           "Timestamp"
+         (propertize "Timestamp" 'face 'transient-inapt-suffix))))
+    ("!" org-timestamp-inactive :description
+     (lambda () 			 (if
+           (ignore-errors
+             (not
+              (org-before-first-heading-p)))
+           "Timestamp (inactive)"
+         (propertize "Timestamp (inactive)" 'face 'transient-inapt-suffix))))
+    ("c" "Change Date" org-extra-menu-changedate)
+    ("y" "Compute Time Range" org-evaluate-time-range)
+    ("s" org-schedule :description
+     (lambda () 			 (if
+           (ignore-errors
+             (not
+              (org-before-first-heading-p)))
+           "Schedule Item"
+         (propertize "Schedule Item" 'face 'transient-inapt-suffix))))
+    ("d" org-deadline :description
+     (lambda () 			 (if
+           (ignore-errors
+             (not
+              (org-before-first-heading-p)))
+           "Deadline"
+         (propertize "Deadline" 'face 'transient-inapt-suffix))))
+    ""
+    ("C" org-toggle-timestamp-overlays :description
+     (lambda () 			 (org-extra--bar-make-toggle-description "Custom time format" org-display-custom-times "*" " " "(" ")"))
+     :transient t)
+    ""
+    (">" "Goto Calendar" org-goto-calendar)
+    ("<" "Date from Calendar" org-date-from-calendar)
+    ""
+    ("S" "Start/Restart Timer" org-timer-start)
+    ("p" "Pause/Continue Timer" org-timer-pause-or-continue)
+    ("t" "Stop Timer" org-timer-pause-or-continue)
+    ("i" "Insert Timer String" org-timer)
+    ("I" "Insert Timer Item" org-timer-item)]])
+
+
+(transient-define-prefix org-extra-menu-changedate ()
+   "Transient menu for Change Date commands." :refresh-suffixes t
+  ["org -> Dates and Scheduling -> Change Date"
+   [("d" org-shiftright :description
+     (lambda () 			 (if
+           (ignore-errors
+             (org-at-timestamp-p 'lax))
+           "1 Day Later"
+         (propertize "1 Day Later" 'face 'transient-inapt-suffix))))
+    ("D" org-shiftleft :description
+     (lambda () 			 (if
+           (ignore-errors
+             (org-at-timestamp-p 'lax))
+           "1 Day Earlier"
+         (propertize "1 Day Earlier" 'face 'transient-inapt-suffix))))
+    ("l" org-shiftup :description
+     (lambda () 			 (if
+           (ignore-errors
+             (org-at-timestamp-p 'lax))
+           "1 ... Later"
+         (propertize "1 ... Later" 'face 'transient-inapt-suffix))))
+    ("e" org-shiftdown :description
+     (lambda () 			 (if
+           (ignore-errors
+             (org-at-timestamp-p 'lax))
+           "1 ... Earlier"
+         (propertize "1 ... Earlier" 'face 'transient-inapt-suffix))))]])
+
+
+(transient-define-prefix org-extra-menu-tagsandproperties ()
+   "Transient menu for TAGS and Properties commands." :refresh-suffixes t
+  ["org -> TAGS and Properties"
+   [("q" org-set-tags-command :description
+     (lambda () 			 (if
+           (ignore-errors
+             (not
+              (org-before-first-heading-p)))
+           "Set Tags"
+         (propertize "Set Tags" 'face 'transient-inapt-suffix))))
+    ("c" org-change-tag-in-region :description
+     (lambda () 			 (if
+           (ignore-errors
+             (org-region-active-p))
+           "Change tag in region"
+         (propertize "Change tag in region" 'face 'transient-inapt-suffix))))
+    ""
+    ("s" org-set-property :description
+     (lambda () 			 (if
+           (ignore-errors
+             (not
+              (org-before-first-heading-p)))
+           "Set property"
+         (propertize "Set property" 'face 'transient-inapt-suffix))))
+    ("C" "Column view of properties" org-columns)
+    ("i" "Insert Column View DBlock" org-columns-insert-dblock)]])
+
+
+(transient-define-prefix org-extra-menu-todolists ()
+  "Transient menu for TODO Lists commands."
+  :refresh-suffixes t
+  ["org -> TODO Lists"
+   [("t" "TODO/DONE/-" org-todo)
+    ("s" "Select keyword" org-extra-menu-selectkeyword)
+    ("S" "Show TODO Tree" org-show-todo-tree)
+    ("g" "Global TODO list" org-todo-list)
+    ""
+    ("e" (lambda ()
+           (interactive)
+           (customize-variable 'org-enforce-todo-dependencies))
+     :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Enforce dependencies"
+                                               org-enforce-todo-dependencies "+"
+                                               " " "[" "]"))
+     :transient t)
+    ""
+    ("d" org-toggle-ordered-property
+     :description
+     (lambda ()
+       (let ((descr
+              (org-extra--bar-make-toggle-description "Do Children sequentially"
+                                                      (org-entry-get nil
+                                                                     "ORDERED")
+                                                      "*" " " "(" ")")))
+         (if
+             (ignore-errors org-enforce-todo-dependencies)
+             descr
+           (propertize descr 'face 'transient-inapt-suffix))))
+     :transient t)
+    ("D" org-toggle-ordered-property
+     :description
+     (lambda ()
+       (let ((descr
+              (org-extra--bar-make-toggle-description "Do Children parallel"
+                                                      (not
+                                                       (org-entry-get nil
+                                                                      "ORDERED"))
+                                                      "*" " " "(" ")")))
+         (if
+             (ignore-errors org-enforce-todo-dependencies)
+             descr
+           (propertize descr 'face 'transient-inapt-suffix))))
+     :transient t)
+    ""
+    ("," "Set Priority" org-priority)
+    ("p" "Priority Up" org-shiftup :transient t)
+    ("P" "Priority Down" org-shiftdown :transient t)
+    ""
+    ("G" "Get news from all feeds" org-feed-update-all)
+    ("T" "Go to the inbox of a feed..." org-feed-goto-inbox)
+    ("c" "Customize feeds" (lambda ()
+                             (interactive)
+                             (customize-variable 'org-feed-alist)))]])
+
+
+(transient-define-prefix org-extra-menu-selectkeyword ()
+   "Transient menu for Select keyword commands." :refresh-suffixes t
+  ["org -> TODO Lists -> Select keyword"
+   [("n" org-shiftright :description
+     (lambda () 			 (if
+           (ignore-errors
+             (org-at-heading-p))
+           "Next keyword"
+         (propertize "Next keyword" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("p" org-shiftleft :description
+     (lambda () 			 (if
+           (ignore-errors
+             (org-at-heading-p))
+           "Previous keyword"
+         (propertize "Previous keyword" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("c" pcomplete :description
+     (lambda () 			 (if
+           (ignore-errors
+             (assq :todo-keyword
+                   (org-context)))
+           "Complete Keyword"
+         (propertize "Complete Keyword" 'face 'transient-inapt-suffix))))
+    ("N" org-shiftcontrolright :description
+     (lambda () 			 (if
+           (ignore-errors
+             (and
+              (>
+               (length org-todo-sets)
+               1)
+              (org-at-heading-p)))
+           "Next keyword set"
+         (propertize "Next keyword set" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("P" org-shiftcontrolright :description
+     (lambda () 			 (if
+           (ignore-errors
+             (and
+              (>
+               (length org-todo-sets)
+               1)
+              (org-at-heading-p)))
+           "Previous keyword set"
+         (propertize "Previous keyword set" 'face 'transient-inapt-suffix)))
+     :transient t)]])
+
+
+(transient-define-prefix org-extra-menu-hyperlinks ()
+  "Transient menu for Hyperlinks commands."
+  :refresh-suffixes t
+  ["org -> Hyperlinks"
+   [("s" "Store Link (Global)" org-store-link)
+    ("f" "Find existing link to here" org-occur-link-in-agenda-files)
+    ("l" "Insert Link" org-insert-link)
+    ("o" "Follow Link" org-open-at-point)
+    ""
+    ("n" "Next link" org-next-link :transient t)
+    ("p" "Previous link" org-previous-link :transient t)
+    ""
+    ("d" org-toggle-link-display
+     :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Descriptive Links"
+                                              org-link-descriptive
+                                              "*" " " "(" ")"))
+     :transient t)
+    ("L" org-toggle-link-display
+     :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Literal Links"
+                                              (not org-link-descriptive)
+                                              "*" " " "(" ")"))
+     :transient t)]])
+
+
+
+
+(transient-define-prefix org-extra-menu-editing ()
+  "Transient menu for Editing commands."
+  :refresh-suffixes t
+  ["org -> Editing"
+   [("e" "Emphasis..." org-emphasize)
+    ("," "Add block structure" org-insert-structure-template)
+    ("'" "Edit Source Example" org-edit-special)
+    ""
+    ("f" "Footnote new/jump" org-footnote-action)
+    ("F" "Footnote extra" org-extra-footnote)]])
+
+
+(transient-define-prefix org-extra-menu-editstructure ()
+  "Transient menu for Edit Structure commands."
+  :refresh-suffixes t
+  ["org -> Edit Structure"
+   [("m" org-metaup
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-heading-p))
+           "Move Subtree Up"
+         (propertize "Move Subtree Up" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("M" org-metadown
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-heading-p))
+           "Move Subtree Down"
+         (propertize "Move Subtree Down" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ""
+    ("c" org-copy-special :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Copy Subtree"
+         (propertize "Copy Subtree" 'face 'transient-inapt-suffix))))
+    ("C" org-cut-special :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Cut Subtree"
+         (propertize "Cut Subtree" 'face 'transient-inapt-suffix))))
+    ("p" org-paste-special
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (not
+              (org-at-table-p)))
+           "Paste Subtree"
+         (propertize "Paste Subtree" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ""
+    ("s" "Clone subtree, shift time" org-clone-subtree-with-time-shift)
+    ""
+    ("v" "Copy visible text" org-copy-visible)
+    ""
+    ("P" org-metaleft :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Promote Heading"
+         (propertize "Promote Heading" 'face 'transient-inapt-suffix))))
+    ("S" org-shiftmetaleft :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Promote Subtree"
+         (propertize "Promote Subtree" 'face 'transient-inapt-suffix))))
+    ("d" org-metaright :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Demote Heading"
+         (propertize "Demote Heading" 'face 'transient-inapt-suffix))))
+    ("D" org-shiftmetaright :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Demote Subtree"
+         (propertize "Demote Subtree" 'face 'transient-inapt-suffix))))
+    ""
+    ("^" "Sort Region/Children" org-sort)
+    ""
+    ("t" "Convert to odd levels" org-convert-to-odd-levels)
+    ("T" "Convert to odd/even levels" org-convert-to-oddeven-levels)
+    ("w" org-refile :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Refile Subtree"
+         (propertize "Refile Subtree" 'face 'transient-inapt-suffix))))
+    ("r" org-refile-copy :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Refile and copy Subtree"
+         (propertize "Refile and copy Subtree" 'face 'transient-inapt-suffix))))]])
+
+
+(transient-define-prefix org-extra-menu-navigateheadings ()
+  "Transient menu for Navigate Headings commands."
+  :refresh-suffixes t
+  :transient-non-suffix #'transient--do-stay
+  :transient-suffix #'transient--do-call
+  ["org -> Navigate Headings"
+   [("u" "Up" outline-up-heading :transient t)
+    ("n" "Next" outline-next-visible-heading :transient t)
+    ("p" "Previous" outline-previous-visible-heading :transient t)
+    ("f" "Next Same Level" outline-forward-same-level :transient t)
+    ("b" "Previous Same Level" outline-backward-same-level :transient t)
+    ""
+    ("j" "Jump" org-goto  :transient nil)]])
+
+
+(transient-define-prefix org-extra-menu-showhide ()
+  "Transient menu for Show/Hide commands."
+  :refresh-suffixes t
+  :transient-suffix #'transient--do-call
+  ["org -> Show/Hide"
+   [("TAB" "Cycle Visibility" org-cycle
+     :inapt-if-not (lambda ()
+                     (ignore-errors
+                       (or
+                        (bobp)
+                        (outline-on-heading-p))))
+     :transient t)
+    ("c" org-shifttab
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (not
+              (org-at-table-p)))
+           "Cycle Global Visibility"
+         (propertize "Cycle Global Visibility" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("/" "Sparse Tree..." org-sparse-tree :transient nil)
+    ("r" "Reveal Context" org-fold-reveal)
+    ("s" "Show All" org-fold-show-all)
+    ""
+    ("S" "Subtree to indirect buffer" org-tree-to-indirect-buffer
+     :transient nil)]])
+
+
+;;;###autoload (autoload 'org-extra-org-mode-menu "org-extra" nil t)
+(transient-define-prefix org-extra-org-mode-menu ()
+  "Define a menu for Org mode with various actions."
+  [("s" "Show/Hide" org-extra-show-hide-menu)
+   ("n" "New Heading" org-insert-heading)
+   ("a" "Navigate Headings" org-extra-navigate-headings-menu)
+   ("e" "Edit Structure" org-extra-edit-structure-menu)
+   ("d" "Editing" org-extra-editing-menu)
+   ("r" "Archive" org-extra-menu-archive)
+   ("h" "Hyperlinks" org-extra-hyperlinks-menu)
+   ("t" "TODO Lists" org-extra-todo-lists-menu)
+   ("g" "TAGS and Properties" org-extra-tags-and-properties-menu)
+   ("c" "Dates and Scheduling" org-extra-dates-and-scheduling-menu)
+   ("l" "Logging work" org-extra-logging-work-menu)
+   ("o" "Agenda Command... (C-c A)" org-agenda)
+   ("i" "Set Restriction Lock (C-c C-x <)" org-agenda-set-restriction-lock)
+   ("f" "File List for Agenda" org-extra-file-list-for-agenda-menu)
+   ("p" "Special views current file" org-extra-special-views-current-file-menu)
+   ("x" "Export/Publish... (C-c C-e)" org-export-dispatch)
+   ("b" "LaTeX" org-extra-latex-menu)
+   ("u" "Documentation" org-extra-documentation-menu)
+   ("m" "Customize" org-extra-customize-menu)
+   ("j" "Send bug report" org-submit-bug-report)
+   ("k" "Refresh/Reload" org-extra-refresh-reload-menu)])
+
+;;;###autoload (autoload 'org-extra-c-x-menu "org-extra" nil t)
+(transient-define-prefix org-extra-c-x-menu ()
+  "Provide toggle, navigation, timer, and clock actions for Org mode."
+  :transient-non-suffix #'transient--do-stay
+  :refresh-suffixes t
+  [[("TAB" "Show/Hide" org-extra-menu-showhide)
+    ""
+    ("," "Images" org-toggle-inline-images :transient t)
+    ("." "Toggle" org-extra-toggle-menu :transient nil)
+    ("N" "Navigate Headings" org-extra-menu-navigateheadings)
+    ("e" "Edit Structure" org-extra-menu-editstructure)
+    ("E" "Editing" org-extra-menu-editing)
+    ("a" "Archive" org-extra-menu-archive)
+    ""
+    ("h" "Hyperlinks" org-extra-menu-hyperlinks)
+    ""
+    ("t" "TODO Lists" org-extra-menu-todolists)
+    ("T" "TAGS and Properties" org-extra-menu-tagsandproperties)
+    ("d" "Dates and Scheduling" org-extra-menu-datesandscheduling)
+    ("l" "Logging work" org-extra-logging-work-menu)
+    ""
+    ("A" "Agenda Command..." org-agenda)
+    ("<" "Set Restriction Lock" org-agenda-set-restriction-lock)
+    (">" "Remove Restriction Lock" org-agenda-remove-restriction-lock)
+    ("f" "File List for Agenda" org-extra-menu-filelistforagenda)
+    ("v" "Special views current file" org-extra-menu-specialviewscurrentfile)
+    ""
+    ("x" "Export/Publish..." org-export-dispatch)
+    ("L" "LaTeX" org-extra-menu-latex)
+    ""
+    ("D" "Documentation" org-extra-menu-documentation)
+    ("C" "Customize" org-extra-menu-customize)
+    ("b" "Send bug report" org-submit-bug-report)
+    ""
+    ("!" "Refresh/Reload" org-extra-refresh-reload-menu)]
+   ["Insert"
+    ("ih" "New Heading" org-insert-heading)
+    ("ii" "item" org-insert-item)
+    ("il" "link" org-insert-link)
+    ("id" "drawer" org-insert-drawer)
+    ("iL" "all-links" org-insert-all-links)
+    ("is" "subheading" org-insert-subheading)
+    ("ig" "link-global" org-insert-link-global)
+    ("it" "todo-heading" org-insert-todo-heading)
+    ("iD" "columns-dblock" org-insert-columns-dblock)
+    ("iT" "todo-subheading" org-insert-todo-subheading)
+    ("iS" "last-stored-link" org-insert-last-stored-link)
+    ("ie" "structure-template" org-insert-structure-template)
+    ("ia" "heading-after-current" org-insert-heading-after-current)
+    ("C-<return>" "heading-respect-content" org-insert-heading-respect-content)
+    ("ir" "todo-heading-respect-content" org-insert-todo-heading-respect-content)]
+   [("g" "Get news from all feeds " org-feed-update-all)
+    ("G" "Go to the inbox of a feed..." org-feed-goto-inbox)
+    ("c" "Clock/Timer" org-extra-menu-clock :transient nil)
+    ("C-c" org-extra-columns-toggle :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description "Column view of pproperties"
+                                               org-columns-current-fmt "+"
+                                               "" "[" "]")))
+    ("C-y" "Paste special" org-paste-special)
+    ("M-w" org-copy-special :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Copy Rectangle"
+         (propertize "Copy Rectangle" 'face 'transient-inapt-suffix))))
+    ("o" "Footnote extra" org-extra-footnote)
+    ("C-w" org-cut-special :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-at-table-p))
+           "Cut Rectangle"
+         (propertize "Cut Rectangle" 'face 'transient-inapt-suffix))))]
+   [("M-<left>" org-metaleft
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Promote Heading"
+         (propertize "Promote Heading" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("M-S-<left>" org-shiftmetaleft
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Promote Subtree"
+         (propertize "Promote Subtree" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("M-<right>" org-metaright
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Demote Heading"
+         (propertize "Demote Heading" 'face 'transient-inapt-suffix)))
+     :transient t)
+    ("M-S-<right>" org-shiftmetaright
+     :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (org-in-subtree-not-table-p))
+           "Demote Subtree"
+         (propertize "Demote Subtree" 'face 'transient-inapt-suffix)))
+     :transient t)]]
+  (interactive)
+  (require 'org-colview)
+  (transient-setup #'org-extra-c-x-menu))
 
 
 
