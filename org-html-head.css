@@ -1138,11 +1138,17 @@ h6 {
   font-size: 100%;
 }
 
+h2,
+h3 {
+  margin-bottom: 0.5em;
+}
+
 h4,
 h5,
 h6 {
   color: #2980b9;
   font-weight: 300;
+  margin-bottom: 0.3em;
 }
 
 html {
@@ -1578,7 +1584,9 @@ table thead th {
 
 table caption {
   color: #000;
-  font: italic 85%/1 arial, sans-serif;
+  font:
+    italic 85%/1 arial,
+    sans-serif;
   padding: 1em 0;
 }
 
@@ -1592,7 +1600,9 @@ table tr:nth-child(2n) td {
 
 .figure p {
   color: #000;
-  font: italic 85%/1 arial, sans-serif;
+  font:
+    italic 85%/1 arial,
+    sans-serif;
   padding: 1em 0;
 }
 
@@ -1744,7 +1754,8 @@ textarea,
 @font-face {
   font-family: 'FontAwesome';
   src: url('../fonts/fontawesome-webfont.eot?v=4.1.0');
-  src: url('../fonts/fontawesome-webfont.eot?#iefix&v=4.1.0')
+  src:
+    url('../fonts/fontawesome-webfont.eot?#iefix&v=4.1.0')
       format('embedded-opentype'),
     url('../fonts/fontawesome-webfont.woff?v=4.1.0') format('woff'),
     url('../fonts/fontawesome-webfont.ttf?v=4.1.0') format('truetype'),

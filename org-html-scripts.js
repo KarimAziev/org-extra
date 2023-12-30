@@ -76,6 +76,7 @@
         }
       };
       toggleButtonElem.onclick = handleClick;
+      toggleButtonElem.id = 'km-theme-toggler';
       toggleButtonElem.style.cssText = `position:absolute;
                                         z-index: 9999;
                                         right: 5px;
@@ -172,7 +173,7 @@ transition: 0.3s;`;
           el.innerText
             .split('\n')
             .map((line) => line.replace(/^[\s]*[\d]+:/g, ''))
-            .join('\n')
+            .join('\n'),
         );
         message('Copied', 500);
       } else {
