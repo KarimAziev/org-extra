@@ -6,7 +6,7 @@
 ;; URL: https://github.com/KarimAziev/org-extra
 ;; Keywords: outlines
 ;; Version: 0.1.1
-;; Package-Requires: ((emacs "29.1") (org "9.6.11") (transient "0.4.3"))
+;; Package-Requires: ((emacs "29.1") (org "9.6.14") (transient "0.5.3"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is NOT part of GNU Emacs.
@@ -2040,32 +2040,9 @@ OFF-LABEL. It has no default value."
           (org-table-get (org-table-current-line)
                          (org-table-current-column)))))))
 
-(defun org-extra-convert-table ()
-  "Convert selected region to a table or create a new table."
-  (cond ((org-region-active-p)
-         (org-table-convert-region
-          (region-beginning)
-          (region-end)
-          (pcase (car (read-multiple-choice ""
-                                            '((?,",")
-                                              (?t "TAB")
-                                              (?r "a regular expression")
-                                              (?i "integer (number of spaces or tabs)")
-                                              (?n "auto")
-                                              (?q "auto"))))
-            (?,'(4))
-            (?t '(16))
-            (?r '(64))
-            (?i (read-number
-                 "A number to use that many spaces, or a TAB, as field separator"
-                 2))
-            ((or ?n ?q) nil))))
-        (t (org-table-create (format "%sx%s"
-                                     (read-number "Columns: " 2)
-                                     (read-number "Rows: " 4))))))
 
 
-
+;;;###autoload (autoload 'org-extra-create-table-menu "org-extra" nil t)
 (transient-define-prefix org-extra-create-table-menu ()
   "Define a menu for creating Org tables with options."
   ["Create Table"
@@ -2099,7 +2076,7 @@ OFF-LABEL. It has no default value."
                            (or (transient-arg-value "--rows=" args)
                                (nth 1 (org-split-string org-table-default-size
                                                         " *x *"))))))
-        (print size))))])
+        (org-table-create size))))])
 
 ;;;###autoload (autoload 'org-extra-menu-org-table-transient "org-extra" nil t)
 (transient-define-prefix org-extra-menu-org-table-transient ()
@@ -2250,22 +2227,6 @@ OFF-LABEL. It has no default value."
     ("R" "Rectangle" org-extra-table-rectangle-menu
      :transient nil)
     ""
-    ("e" org-table-create :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (not
-              (org-at-table-p)))
-           "Create"
-         (propertize "Create" 'face 'transient-inapt-suffix))))
-    ("O" org-table-convert-region :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (not
-              (org-at-table-p 'any)))
-           "Convert Region"
-         (propertize "Convert Region" 'face 'transient-inapt-suffix))))
     ("E" org-table-export :description
      (lambda ()
        (if
@@ -2277,47 +2238,57 @@ OFF-LABEL. It has no default value."
     ""
     ("~" "Create/Convert from/to table.el" org-table-create-with-table.el)
     ("P" "Plot" org-extra-table-plot-menu :transient nil)
-    ""
-    ("q" "Quit" transient-quit-all)]]
+    ""]]
   [:if-not org-at-table-p
-   [("I" org-table-import :description
+   [("e" org-extra-create-table-menu :description
+     (lambda ()
+       (if
+           (ignore-errors
+             (not
+              (org-at-table-p)))
+           "Create"
+         (propertize "Create" 'face 'transient-inapt-suffix))))
+    ("I" org-table-import :description
      (lambda ()
        (if
            (ignore-errors
              (not
               (org-at-table-p)))
            "Import from File"
-         (propertize "Import from File" 'face 'transient-inapt-suffix))))]]
+         (propertize "Import from File" 'face 'transient-inapt-suffix))))
+    ("O"
+     (lambda ()
+       (interactive)
+       (org-table-convert-region
+        (region-beginning)
+        (region-end)
+        (pcase (car (read-multiple-choice ""
+                                          '((?,",")
+                                            (?t "TAB")
+                                            (?r "a regular expression")
+                                            (?i "integer (number of spaces or tabs)")
+                                            (?n "auto")
+                                            (?q "auto"))))
+          (?,'(4))
+          (?t '(16))
+          (?r '(64))
+          (?i (read-number
+               "A number to use that many spaces, or a TAB, as field separator"
+               2))
+          ((or ?n ?q) nil))))
+     :description (lambda () "Convert table from region")
+     :if (lambda ()
+           (and
+            (ignore-errors
+              (not
+               (org-at-table-p 'any)))
+            (org-region-active-p)))
+     :transient nil)]]
+  [("q" "Quit" transient-quit-all)]
   (interactive)
   (require 'org)
   (require 'org-table)
-  (if
-      (when (fboundp 'org-at-table-p)
-        (org-at-table-p))
-      (transient-setup #'org-extra-menu-org-table-transient)
-    (if
-        (when (fboundp 'org-region-active-p)
-          (org-region-active-p))
-        (org-table-convert-region
-         (region-beginning)
-         (region-end)
-         (pcase (car (read-multiple-choice ""
-                                           '((?,",")
-                                             (?t "TAB")
-                                             (?r "a regular expression")
-                                             (?i "integer (number of spaces or tabs)")
-                                             (?n "auto")
-                                             (?q "auto"))))
-           (?,'(4))
-           (?t '(16))
-           (?r '(64))
-           (?i (read-number
-                "A number to use that many spaces, or a TAB, as field separator"
-                2))
-           ((or ?n ?q) nil)))
-      (org-table-create (format "%sx%s"
-                                (read-number "Columns: " 2)
-                                (read-number "Rows: " 4))))))
+  (transient-setup #'org-extra-menu-org-table-transient))
 
 ;;;###autoload
 (defun org-extra-info-timers ()
@@ -2497,6 +2468,7 @@ OFF-LABEL. It has no default value."
      org-timer-item)
     ("h" "Schedule" org-schedule)]])
 
+;;;###autoload
 (defun org-extra-columns-toggle ()
   "Toggle display of columns in Org mode."
   (interactive)
@@ -2535,6 +2507,7 @@ OFF-LABEL. It has no default value."
 
 
 
+;;;###autoload (autoload 'org-extra-menu-customize "org-extra" nil t)
 (transient-define-prefix org-extra-menu-customize ()
    "Transient menu for Customize commands." :refresh-suffixes t
   ["org -> Customize"
@@ -2543,6 +2516,7 @@ OFF-LABEL. It has no default value."
     ("e" "Expand This Menu" org-create-customize-menu)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-documentation "org-extra" nil t)
 (transient-define-prefix org-extra-menu-documentation ()
    "Transient menu for Documentation commands." :refresh-suffixes t
   ["org -> Documentation"
@@ -2551,6 +2525,7 @@ OFF-LABEL. It has no default value."
     ("b" "Browse Org News" org-browse-news)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-latex "org-extra" nil t)
 (transient-define-prefix org-extra-menu-latex ()
   "Transient menu for LaTeX commands."
   :refresh-suffixes t
@@ -2578,6 +2553,7 @@ OFF-LABEL. It has no default value."
     ("i" "Insert citation" org-reftex-citation)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-specialviewscurrentfile "org-extra" nil t)
 (transient-define-prefix org-extra-menu-specialviewscurrentfile ()
    "Transient menu for Special views current file commands." :refresh-suffixes t
   ["org -> Special views current file"
@@ -2586,6 +2562,7 @@ OFF-LABEL. It has no default value."
     ("\\" "Tags/Property tree" org-match-sparse-tree)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-filelistforagenda "org-extra" nil t)
 (transient-define-prefix org-extra-menu-filelistforagenda ()
   "Transient menu for File List for Agenda commands."
   :refresh-suffixes t
@@ -2598,6 +2575,7 @@ OFF-LABEL. It has no default value."
 
 
 
+;;;###autoload (autoload 'org-extra-menu-datesandscheduling "org-extra" nil t)
 (transient-define-prefix org-extra-menu-datesandscheduling ()
    "Transient menu for Dates and Scheduling commands." :refresh-suffixes t
   ["org -> Dates and Scheduling"
@@ -2646,6 +2624,7 @@ OFF-LABEL. It has no default value."
     ("I" "Insert Timer Item" org-timer-item)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-changedate "org-extra" nil t)
 (transient-define-prefix org-extra-menu-changedate ()
    "Transient menu for Change Date commands." :refresh-suffixes t
   ["org -> Dates and Scheduling -> Change Date"
@@ -2675,6 +2654,7 @@ OFF-LABEL. It has no default value."
          (propertize "1 ... Earlier" 'face 'transient-inapt-suffix))))]])
 
 
+;;;###autoload (autoload 'org-extra-menu-tagsandproperties "org-extra" nil t)
 (transient-define-prefix org-extra-menu-tagsandproperties ()
    "Transient menu for TAGS and Properties commands." :refresh-suffixes t
   ["org -> TAGS and Properties"
@@ -2703,6 +2683,7 @@ OFF-LABEL. It has no default value."
     ("i" "Insert Column View DBlock" org-columns-insert-dblock)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-todolists "org-extra" nil t)
 (transient-define-prefix org-extra-menu-todolists ()
   "Transient menu for TODO Lists commands."
   :refresh-suffixes t
@@ -2761,6 +2742,7 @@ OFF-LABEL. It has no default value."
                              (customize-variable 'org-feed-alist)))]])
 
 
+;;;###autoload (autoload 'org-extra-menu-selectkeyword "org-extra" nil t)
 (transient-define-prefix org-extra-menu-selectkeyword ()
    "Transient menu for Select keyword commands." :refresh-suffixes t
   ["org -> TODO Lists -> Select keyword"
@@ -2809,6 +2791,7 @@ OFF-LABEL. It has no default value."
      :transient t)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-hyperlinks "org-extra" nil t)
 (transient-define-prefix org-extra-menu-hyperlinks ()
   "Transient menu for Hyperlinks commands."
   :refresh-suffixes t
@@ -2839,6 +2822,7 @@ OFF-LABEL. It has no default value."
 
 
 
+;;;###autoload (autoload 'org-extra-menu-editing "org-extra" nil t)
 (transient-define-prefix org-extra-menu-editing ()
   "Transient menu for Editing commands."
   :refresh-suffixes t
@@ -2851,6 +2835,7 @@ OFF-LABEL. It has no default value."
     ("F" "Footnote extra" org-extra-footnote)]])
 
 
+;;;###autoload (autoload 'org-extra-menu-editstructure "org-extra" nil t)
 (transient-define-prefix org-extra-menu-editstructure ()
   "Transient menu for Edit Structure commands."
   :refresh-suffixes t
@@ -2952,6 +2937,7 @@ OFF-LABEL. It has no default value."
          (propertize "Refile and copy Subtree" 'face 'transient-inapt-suffix))))]])
 
 
+;;;###autoload (autoload 'org-extra-menu-navigateheadings "org-extra" nil t)
 (transient-define-prefix org-extra-menu-navigateheadings ()
   "Transient menu for Navigate Headings commands."
   :refresh-suffixes t
@@ -3205,7 +3191,7 @@ OFF-LABEL. It has no default value."
   (require 'org-gcal nil t)
   (when (and (org-extra--in-gcal-buffer)
              (org-extra--on-gcal-entry))
-    (transient-setup 'org-extra-gcal)))
+    (transient-setup #'org-extra-gcal)))
 
 ;;;###autoload
 (define-minor-mode org-extra-gcal-mode
