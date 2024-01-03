@@ -44,7 +44,6 @@
 (require 'org)
 (require 'transient)
 
-(defvar org-src-block-faces)
 (defvar org-archive-default-command)
 
 (defvar org-columns-current-fmt)
@@ -3123,90 +3122,6 @@ OFF-LABEL. It has no default value."
   (interactive)
   (require 'org-colview)
   (transient-setup #'org-extra-c-x-menu))
-
-;;;###autoload (autoload 'org-extra-gcal "org-extra" nil t)
-(transient-define-prefix org-extra-gcal ()
-  "Select and invoke an EasyPG command from a list of available commands."
-  :transient-suffix     #'transient--do-call
-  :transient-non-suffix #'transient--do-stay
-  :refresh-suffixes t
-  [("D" "Delete entry at point to current calendar" org-gcal-delete-at-point
-    :inapt-if-not org-extra--on-gcal-entry
-    :transient nil)
-   ("p" "Post entry at point to current calendar" org-gcal-post-at-point
-    :inapt-if-not org-extra--on-gcal-entry
-    :transient nil)]
-  [("s" "Sync all events" org-gcal-sync
-    :transient nil)
-   ("y" "Sync buffer with Calendar (fetch and post)" org-gcal-sync-buffer
-    :transient nil)
-   ("f" "Fetch event data from google calendar" org-gcal-fetch
-    :transient nil)
-   ("e" "Fetch without posting changes" org-gcal-fetch-buffer
-    :transient nil)]
-  [("d" org-gcal-toggle-debug
-    :description
-    (lambda ()
-      (org-extra--bar-make-toggle-description "Debug"
-                                              (bound-and-true-p org-gcal-debug)
-                                              "+"
-                                              "" "[" "]"))
-    :transient t)
-   ("u" org-gcal--sync-unlock
-    :description
-    (lambda ()
-      (org-extra--bar-make-toggle-description "Deactivate sync lock "
-                                              (bound-and-true-p
-                                               org-gcal--sync-lock)
-                                              "+"
-                                              "" "[" "]"))
-    :inapt-if-nil org-gcal--sync-lock)
-   ("O" "Setup OAuth2 authentication after setting client id and secret"
-    org-gcal-reload-client-id-secret
-    :transient nil)
-   ("C" "Clear all Calendar api sync tokens" org-gcal-sync-tokens-clear
-    :transient nil)])
-
-(defun org-extra--in-gcal-buffer ()
-  "Check if current buffer is associated with a Google Calendar file."
-  (when-let ((file buffer-file-name))
-    (seq-find (pcase-lambda (`(,_k . ,gcal-file))
-                (and gcal-file
-                     (string=
-                      file
-                      (expand-file-name
-                       gcal-file))))
-              (and (boundp 'org-gcal-fetch-file-alist)
-                   org-gcal-fetch-file-alist))))
-
-(defun org-extra--on-gcal-entry ()
-  "Check for Google Calendar managed property at point."
-  (require 'org-gcal nil t)
-  (when (bound-and-true-p org-gcal-managed-property)
-    (unless (bound-and-true-p org-gcal--sync-lock)
-      (org-entry-get (point) org-gcal-managed-property))))
-
-(defun org-extra--gcal-invoke-menu ()
-  "Display Google Calendar menu for valid entries."
-  (require 'org-gcal nil t)
-  (when (and (org-extra--in-gcal-buffer)
-             (org-extra--on-gcal-entry))
-    (transient-setup #'org-extra-gcal)))
-
-;;;###autoload
-(define-minor-mode org-extra-gcal-mode
-  "Toggle Google Calendar menu in Org mode.
-
-Toggle integration of Google Calendar with Org mode, adding a custom action to
-`\\[org-ctrl-c-ctrl-c]' command on calendar entries."
-  :lighter " org-extra-gcal"
-  :global nil
-  (remove-hook 'org-ctrl-c-ctrl-c-final-hook #'org-extra--gcal-invoke-menu
-               'local)
-  (when org-extra-gcal-mode
-    (add-hook 'org-ctrl-c-ctrl-c-hook #'org-extra--gcal-invoke-menu nil
-              'local)))
-
 
 
 (provide 'org-extra)
