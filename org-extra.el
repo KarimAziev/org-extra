@@ -262,8 +262,11 @@ Usage:
   :lighter " org-eldoc+"
   :global nil
   (if org-extra-eldoc-mode
-      (dolist (fn org-extra-eldoc-flags-functions)
-        (add-hook 'eldoc-documentation-functions fn nil t))
+      (progn
+        (dolist (fn org-extra-eldoc-flags-functions)
+          (add-hook 'eldoc-documentation-functions fn nil t))
+        (unless (bound-and-true-p eldoc-mode)
+          (eldoc-mode 1)))
     (dolist (fn org-extra-eldoc-flags-functions)
       (remove-hook 'eldoc-documentation-functions fn t))))
 
@@ -2576,17 +2579,20 @@ OFF-LABEL. It has no default value."
 
 ;;;###autoload (autoload 'org-extra-menu-datesandscheduling "org-extra" nil t)
 (transient-define-prefix org-extra-menu-datesandscheduling ()
-   "Transient menu for Dates and Scheduling commands." :refresh-suffixes t
+  "Transient menu for Dates and Scheduling commands."
+  :refresh-suffixes t
   ["org -> Dates and Scheduling"
    [("." org-timestamp :description
-     (lambda () 			 (if
+     (lambda ()
+       (if
            (ignore-errors
              (not
               (org-before-first-heading-p)))
            "Timestamp"
          (propertize "Timestamp" 'face 'transient-inapt-suffix))))
     ("!" org-timestamp-inactive :description
-     (lambda () 			 (if
+     (lambda ()
+       (if
            (ignore-errors
              (not
               (org-before-first-heading-p)))
@@ -2595,22 +2601,28 @@ OFF-LABEL. It has no default value."
     ("c" "Change Date" org-extra-menu-changedate)
     ("y" "Compute Time Range" org-evaluate-time-range)
     ("s" org-schedule :description
-     (lambda () 			 (if
+     (lambda ()
+       (if
            (ignore-errors
              (not
               (org-before-first-heading-p)))
            "Schedule Item"
          (propertize "Schedule Item" 'face 'transient-inapt-suffix))))
     ("d" org-deadline :description
-     (lambda () 			 (if
+     (lambda ()
+       (if
            (ignore-errors
              (not
               (org-before-first-heading-p)))
            "Deadline"
          (propertize "Deadline" 'face 'transient-inapt-suffix))))
     ""
-    ("C" org-toggle-timestamp-overlays :description
-     (lambda () 			 (org-extra--bar-make-toggle-description "Custom time format" org-display-custom-times "*" " " "(" ")"))
+    ("C" org-toggle-timestamp-overlays
+     :description
+     (lambda ()
+       (org-extra--bar-make-toggle-description
+        "Custom time format" org-display-custom-times
+        "*" " " "(" ")"))
      :transient t)
     ""
     (">" "Goto Calendar" org-goto-calendar)
