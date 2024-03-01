@@ -2236,7 +2236,7 @@ OFF-LABEL. It has no default value."
              (org-at-table-p))
            "Export to File"
          (propertize "Export to File" 'face 'transient-inapt-suffix))))
-    ("T" "Transpose table" org-table-transpose-table-at-point)
+    (">" "Transpose table" org-table-transpose-table-at-point)
     ""
     ("~" "Create/Convert from/to table.el" org-table-create-with-table.el)
     ("P" "Plot" org-extra-table-plot-menu :transient nil)
