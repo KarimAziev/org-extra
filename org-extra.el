@@ -2097,6 +2097,7 @@ OFF-LABEL. It has no default value."
                                          (org-table-current-column))))
                         (propertize (format "%s" column) 'face 'transient-value)
                       "")))
+    :class transient-column
     :setup-children (lambda (&rest _)
                       (mapcar
                        (apply-partially #'transient-parse-suffix
@@ -2537,14 +2538,14 @@ OFF-LABEL. It has no default value."
      (lambda ()
        (let ((descr
               (org-extra--bar-make-toggle-description "Org CDLaTeX mode"
-                                                      org-cdlatex-mode "+" " " "[" "]")))
+                                                      org-cdlatex-mode "+" " "
+                                                      "[" "]")))
          (if
              (ignore-errors
                (require 'cdlatex nil t))
              descr
            (propertize descr 'face 'transient-inapt-suffix))))
      :transient t)
-    nil nil
     ("m" org-cdlatex-math-modify :description
      (lambda ()
        (if
