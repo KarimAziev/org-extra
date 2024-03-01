@@ -2100,7 +2100,7 @@ OFF-LABEL. It has no default value."
     :setup-children (lambda (&rest _)
                       (mapcar
                        (apply-partially #'transient-parse-suffix
-                                        transient--prefix)
+                                        (oref transient--prefix command))
                        (append
                         (list ""
                               '("<left>"  "Move Column Left"
