@@ -2127,7 +2127,18 @@ OFF-LABEL. It has no default value."
                                 org-shiftmetaleft :transient t)
                               '("w"  "Shrink Column"
                                 org-table-toggle-column-width
-                                :transient t))
+                                :transient t)
+                              '("W" (lambda ()
+                                      (interactive)
+                                      (if
+                                          (org-extra--current-line-exceed-fill-column)
+                                          (org-extra-table-maybe-shrink)
+                                        (org-table-expand)))
+                                :description (lambda ()
+                                               (if
+                                                   (org-extra--current-line-exceed-fill-column)
+                                                   "Shrink columns"
+                                                 "Expand columns"))))
                         (list
                          ""
                          "Field"
@@ -2370,19 +2381,6 @@ OFF-LABEL. It has no default value."
     ("." "Go to today" org-agenda-goto-today)
     ("g r" "Rebuild views " org-agenda-redo)]])
 
-
-(defun org-extra-get-most-long-table-size ()
-  "Calculate the width of the longest Org table."
-  (let ((len))
-    (org-table-map-tables
-     (lambda ()
-       (let ((column-len (progn (goto-char (line-end-position))
-                                (current-column))))
-         (if (not len)
-             (setq len column-len)
-           (if (> column-len len)
-               (setq len column-len))))))
-    len))
 
 (defun org-extra--checkbox-toggable-p ()
   "Check if a checkbox can be toggled."
@@ -3135,6 +3133,53 @@ OFF-LABEL. It has no default value."
   (interactive)
   (require 'org-colview)
   (transient-setup #'org-extra-c-x-menu))
+
+(defun org-extra-get-most-long-table-size ()
+  "Calculate the width of the longest Org table."
+  (let ((len))
+    (org-table-map-tables
+     (lambda ()
+       (let ((column-len (progn (goto-char (line-end-position))
+                                (current-column))))
+         (if (not len)
+             (setq len column-len)
+           (if (> column-len len)
+               (setq len column-len)))))
+     t)
+    len))
+
+(defun org-extra-table-maybe-shrink ()
+  "Shrink table columns if table at point width exceeds `fill-column'."
+  (interactive)
+  (org-extra--table-maybe-shrink))
+
+(defun org-extra--current-line-exceed-fill-column ()
+  "Check if the current line's length exceeds the fill column."
+  (save-excursion
+    (goto-char (line-end-position))
+    (> (current-column) (or (and (bound-and-true-p visual-fill-column-width)
+                                 visual-fill-column-width)
+                            fill-column))))
+
+(defun org-extra--table-maybe-shrink ()
+  "Shrink table columns if table width exceeds `fill-column'."
+  (when (org-at-table-p)
+    (save-excursion
+      (let ((curr-org-col))
+        (goto-char (line-end-position))
+        (while (and
+                (org-extra--current-line-exceed-fill-column)
+                (> (setq curr-org-col (org-table-current-column)) 1))
+          (let ((curr-col (1- curr-org-col)))
+            (org-table-goto-column curr-col)
+            (unless (org-table--shrunk-field)
+              (org-table-toggle-column-width))))))))
+
+(defun org-extra-table-maybe-shrink-all-tables ()
+  "Shrink all tables in an Org document if they exceed `fill-column'."
+  (org-table-map-tables
+   #'org-extra-table-maybe-shrink
+   t))
 
 
 (provide 'org-extra)
