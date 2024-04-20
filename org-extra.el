@@ -1311,6 +1311,16 @@ mode for parsing CODE."
                   (insert "#+name: " name "\n")))))
           (goto-char end-block))))))
 
+(defvar org-html-head)
+(defun org-extra--update-css ()
+  "Update `org-html-head' with CSS content if file is `org-html-head.css'."
+  (when (and buffer-file-name
+             (string= (file-name-base buffer-file-name) "org-html-head")
+             (equal (file-name-extension buffer-file-name)
+                    "css"))
+    (let ((org-extra-preview-data-root default-directory))
+      (setq org-html-head (org-extra-get-html-head)))))
+
 (defun org-extra-get-html-head ()
   "Extract and format CSS content for HTML head from a file."
   (let ((content (with-temp-buffer
