@@ -21,13 +21,21 @@
       target.scrollIntoView();
     }
   }
-  function toggleSideMenu() {
-    document.querySelector('#table-of-contents').classList.toggle('open');
-  }
+
   function initSideMenu() {
+    const toc = document.querySelector('#table-of-contents');
     const title = document.querySelector('#table-of-contents h2');
-    if (title) {
-      title.addEventListener('click', toggleSideMenu);
+
+    if (toc) {
+      toc.addEventListener('click', function (e) {
+        const target = e.target;
+
+        if (title === target) {
+          this.classList.toggle('open');
+        } else if (window.matchMedia('screen and (max-width: 50rem)').matches) {
+          this.classList.toggle('open');
+        }
+      });
     }
   }
   function addHighlightRefs() {
