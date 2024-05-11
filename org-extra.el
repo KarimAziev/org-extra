@@ -3183,7 +3183,7 @@ OFF-LABEL. It has no default value."
           (let ((curr-col (1- curr-org-col)))
             (org-table-goto-column curr-col)
             (unless (org-table--shrunk-field)
-              (org-table-toggle-column-width))))))))
+              (org-table-toggle-column-width (list curr-col)))))))))
 
 (defun org-extra-table-maybe-shrink-all-tables ()
   "Shrink all tables in an Org document if they exceed `fill-column'."
