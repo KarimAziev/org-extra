@@ -45,6 +45,7 @@
 (require 'transient)
 
 (defvar org-archive-default-command)
+(defvar org-html-head)
 
 (defvar org-columns-current-fmt)
 (declare-function org-columns-quit "org-colview")
@@ -112,6 +113,23 @@
            (const :tag "Xml" xml)
            (symbol :tag "Other"))
           :value-type (string :tag "Org babel language")))
+
+(defmacro org-extra-csetq (&rest args)
+  "Set custom variables using their `custom-set' function or `set-default'.
+
+Remaining arguments ARGS are alternating symbols and values, where each symbol
+is a customizable variable to set, and the corresponding value is the new value
+for that variable."
+  (declare (debug km-csetq))
+  (let ((exps nil))
+    (while args
+      (let ((variable (pop args)))
+        (push `(funcall (or
+                         (get ',variable 'custom-set)
+                         #'set-default)
+                ',variable ,(pop args))
+              exps)))
+    `(progn . ,(nreverse exps))))
 
 (defun org-extra-extend-faces ()
   "Add extra face to `org-mode'."
@@ -1311,15 +1329,32 @@ mode for parsing CODE."
                   (insert "#+name: " name "\n")))))
           (goto-char end-block))))))
 
-(defvar org-html-head)
-(defun org-extra--update-css ()
-  "Update `org-html-head' with CSS content if file is `org-html-head.css'."
+
+
+(defun org-extra-update-css ()
+  "Update `org-html-head' with CSS content if file is `org-html-head.css'.
+
+This command is for development purposes."
+  (interactive)
   (when (and buffer-file-name
              (string= (file-name-base buffer-file-name) "org-html-head")
              (equal (file-name-extension buffer-file-name)
                     "css"))
     (let ((org-extra-preview-data-root default-directory))
-      (setq org-html-head (org-extra-get-html-head)))))
+      (org-extra-csetq org-html-head (org-extra-get-html-head)))))
+
+
+(defun org-extra-update-js ()
+  "Update `org-html-scripts' with CSS content if file is `org-html-head.css'.
+
+This command is for development purposes."
+  (interactive)
+  (when (and buffer-file-name
+             (string= (file-name-base buffer-file-name) "org-html-scripts")
+             (equal (file-name-extension buffer-file-name)
+                    "js"))
+    (let ((org-extra-preview-data-root default-directory))
+      (org-extra-csetq org-html-scripts (org-extra-get-html-scripts)))))
 
 (defun org-extra-get-html-head ()
   "Extract and format CSS content for HTML head from a file."
@@ -1330,6 +1365,16 @@ mode for parsing CODE."
                                           org-extra-preview-data-root))
                    (buffer-string))))
     (format "<style type=\"text/css\">\n%s</style>" content)))
+
+
+(defun org-extra-set-html-head (&optional arg)
+  "Set or reset `org-html-head' with CSS for HTML export based on ARG.
+
+The optional argument ARG is a prefix argument; if non-nil, it resets the HTML
+head to an empty string."
+  (interactive "P")
+  (setq org-html-head (if arg "" (org-extra-get-html-head)))
+  (org-extra-csetq org-html-head-include-default-style (and arg t)))
 
 (defun org-extra-get-html-scripts ()
   "Insert JavaScript content into an HTML script tag."
@@ -3190,6 +3235,7 @@ OFF-LABEL. It has no default value."
   (org-table-map-tables
    #'org-extra-table-maybe-shrink
    t))
+
 
 
 (provide 'org-extra)
