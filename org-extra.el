@@ -1807,7 +1807,7 @@ OFF-LABEL. It has no default value."
    ("a" "Add block structure (C-c C-,)" org-insert-structure-template)
    ("d" "Edit Source Example (C-c ')" org-edit-special)
    ("f" "Footnote new/jump (C-c C-x f)" org-footnote-action)
-   ("o" "Footnote extra" org-extra-footnote)])
+   ("o" "Footnote" org-extra-footnote)])
 
 ;;;###autoload (autoload 'org-extra-edit-structure-menu "org-extra" nil t)
 (transient-define-prefix org-extra-edit-structure-menu ()
@@ -3141,7 +3141,8 @@ OFF-LABEL. It has no default value."
              (org-at-table-p))
            "Copy Rectangle"
          (propertize "Copy Rectangle" 'face 'transient-inapt-suffix))))
-    ("o" "Footnote extra" org-extra-footnote)
+    ("O" "Footnote extra" org-extra-footnote)
+    ("o" "Footnote new/jump" org-footnote-action)
     ("C-w" org-cut-special :description
      (lambda ()
        (if
