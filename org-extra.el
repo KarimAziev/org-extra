@@ -3363,10 +3363,10 @@ more information."
 
 (transient-define-suffix org-extra-make-subtree ()
   "Create a subtree if the point is within an item."
-  :key "-"
+  :key "="
   :inapt-if-not (lambda ()
                   (org-in-item-p))
-  :description "- List item => * Header item"
+  :description "List item => * Header item"
   (interactive)
   (org-list-make-subtree))
 
@@ -3380,7 +3380,7 @@ more information."
 
 (transient-define-suffix org-extra-toggle-item ()
   "Convert headings or normal lines to items, items to normal lines."
-  :key "="
+  :key "-"
   :transient t
   :description "Headings => normal lines => list"
   (interactive)
@@ -3419,11 +3419,12 @@ more information."
     ("i f" "Footnote new/jump" org-footnote-action)
     ("i d" "Insert Drawer" org-insert-drawer)
     ("i p" org-extra-insert-properties-drawer)
-    ("i i" "Insert Item" org-insert-item)
+    ("i i" "Insert Item" org-insert-item :inapt-if-not org-in-item-p)
     ("i x" "Insert Checkbox"
      (lambda ()
        (interactive)
-       (org-insert-item t)))
+       (org-insert-item t))
+     :inapt-if-not org-in-item-p)
     ("i l" "Insert Link" org-insert-link)
     ("i L" "Insert All Links" org-insert-all-links :inapt-if-nil
      org-stored-links)
