@@ -6,7 +6,7 @@
 ;; URL: https://github.com/KarimAziev/org-extra
 ;; Keywords: outlines
 ;; Version: 0.1.1
-;; Package-Requires: ((emacs "29.1") (org "9.6.14") (transient "0.5.3"))
+;; Package-Requires: ((emacs "29.1") (org "9.6.28") (transient "0.6.0"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is NOT part of GNU Emacs.
@@ -1839,22 +1839,10 @@ OFF-LABEL. It has no default value."
    ("l" "Clone subtree, shift time (C-c C-x c)"
     org-clone-subtree-with-time-shift)
    ("y" "Copy visible text (C-c C-x v)" org-copy-visible)
-   ("r" "Promote Heading (M-<left>)" org-metaleft :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))
-   ("t" "Promote Subtree (M-S-<left>)" org-shiftmetaleft :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))
-   ("d" "Demote Heading (M-<right>)" org-metaright :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))
-   ("e" "Demote Subtree (M-S-<right>)" org-shiftmetaright :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-in-subtree-not-table-p))))
+   ("r" org-extra-metaleft)
+   ("t" org-extra-shiftmetaleft)
+   ("d" org-extra-metaright)
+   ("e" org-extra-shiftmetaright)
    ("s" "Sort Region/Children (C-c ^)" org-sort)
    ("n" "Convert to odd levels" org-convert-to-odd-levels)
    ("v" "Convert to odd/even levels" org-convert-to-oddeven-levels)
@@ -2176,8 +2164,7 @@ OFF-LABEL. It has no default value."
                                                        (org-table-current-column)))
                                                    (and col
                                                     (>= col 1))))))
-                              '("d" "Delete Column"
-                                org-shiftmetaleft :transient t)
+                              '("d" org-extra-shiftmetaleft)
                               '("w"  "Shrink Column"
                                 org-table-toggle-column-width
                                 :transient t)
@@ -2270,8 +2257,7 @@ OFF-LABEL. It has no default value."
     ("s" "Sort lines in region" org-table-sort-lines)
     ""
     "Insert"
-    ("i" "Column" org-shiftmetaright
-     :transient t)
+    ("i" org-extra-shiftmetaright)
     ("h" "Header line" org-ctrl-c-minus :transient t)
     ("C-<return>"  "Row" org-shiftmetadown)
     ""
@@ -2951,34 +2937,10 @@ OFF-LABEL. It has no default value."
     ""
     ("v" "Copy visible text" org-copy-visible)
     ""
-    ("P" org-metaleft :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Promote Heading"
-         (propertize "Promote Heading" 'face 'transient-inapt-suffix))))
-    ("S" org-shiftmetaleft :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Promote Subtree"
-         (propertize "Promote Subtree" 'face 'transient-inapt-suffix))))
-    ("d" org-metaright :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Demote Heading"
-         (propertize "Demote Heading" 'face 'transient-inapt-suffix))))
-    ("D" org-shiftmetaright :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Demote Subtree"
-         (propertize "Demote Subtree" 'face 'transient-inapt-suffix))))
+    ("P" org-extra-metaleft)
+    ("S" org-extra-shiftmetaleft)
+    ("d" org-extra-metaright)
+    ("D" org-extra-shiftmetaright)
     ""
     ("^" "Sort Region/Children" org-sort)
     ""
@@ -3072,6 +3034,282 @@ OFF-LABEL. It has no default value."
    ("j" "Send bug report" org-submit-bug-report)
    ("k" "Refresh/Reload" org-extra-refresh-reload-menu)])
 
+(defun org-extra--get-promote-description (prefix)
+  "Generate a description for promoting an Org heading with PREFIX.
+
+Argument PREFIX is a string to be prepended to the heading description."
+  (let* ((heading (org-get-heading t t t t))
+         (face (and heading (get-text-property 0 'face heading)))
+         (heading-asterix (propertize
+                           (org-extra--get-current-heading-asterix)
+                           'face
+                           face))
+         (short-heading
+          (when heading
+            (truncate-string-to-width heading
+                                      5
+                                      nil
+                                      nil
+                                      t))))
+    (concat prefix " " heading-asterix
+            short-heading
+            " => "
+            (substring heading-asterix 1)
+            short-heading)))
+
+(defun org-extra--get-current-heading-asterix ()
+  "Return the asterisks of the current Org heading if not folded."
+  (save-excursion
+    (forward-line 0)
+    (and (not (org-fold-folded-p))
+         (when (looking-at outline-regexp)
+           (when (re-search-forward outline-regexp nil t
+                                    1)
+             (match-string-no-properties 0))))))
+
+(defun org-extra--get-denote-description (prefix)
+  "Return a formatted PREFIX, heading asterisks, and truncated heading.
+
+Argument PREFIX is a string that will be prepended to the description."
+  (let* ((heading (org-get-heading t t t t))
+         (face (and heading (get-text-property 0 'face heading)))
+         (heading-asterix (propertize
+                           (org-extra--get-current-heading-asterix)
+                           'face
+                           face))
+         (short-heading
+          (when heading
+            (truncate-string-to-width heading
+                                      5
+                                      nil
+                                      nil
+                                      t))))
+    (concat prefix " " heading-asterix
+            short-heading
+            " => "
+            (concat (propertize
+                     "*"
+                     'face
+                     face)
+                    heading-asterix)
+            short-heading)))
+
+
+;;;###autoload (autoload 'org-extra-metaleft "org-extra" nil t)
+(transient-define-suffix org-extra-metaleft ()
+  "Promote heading, list item at point or move table column left."
+  :key "M-<left>"
+  :inapt-if (lambda ()
+              (cond ((org-at-table-p) nil)
+                    ((org-with-limited-levels
+                      (or (org-at-heading-p)
+                          (and (org-region-active-p)
+                               (save-excursion
+                                 (goto-char (region-beginning))
+                                 (org-at-heading-p)))))
+                     (org-check-for-hidden 'headlines))
+                    ((org-at-heading-p) nil)
+                    ((or (org-at-item-p)
+                         (and (org-region-active-p)
+                              (save-excursion
+                                (goto-char (region-beginning))
+                                (org-at-item-p))))
+                     (or (org-check-for-hidden 'items)
+                         (let ((regionp (org-region-active-p)))
+                           (cond ((or (org-at-item-p)
+                                      (and regionp
+                                           (save-excursion
+                                             (goto-char (region-beginning))
+                                             (org-at-item-p))))
+                                  nil)
+                                 (t t)))))))
+  :description
+  (lambda ()
+    (cond ((org-at-table-p)
+           (let ((colname (or (org-extra-get-current-column-name)
+                              (org-table-current-column))))
+             (format "Move column `%s' left" colname)))
+          ((org-with-limited-levels
+            (or (org-at-heading-p)
+                (and (org-region-active-p)
+                     (save-excursion
+                       (goto-char (region-beginning))
+                       (org-at-heading-p)))))
+           (if (org-check-for-hidden 'headlines)
+               "Hidden subtree, open with TAB or use subtree command M-S-<left>/<right>"
+             (org-extra--get-promote-description "Promote")))
+          ;; At an inline task.
+          ((org-at-heading-p)
+           (org-extra--get-promote-description "Promote"))
+          ((or (org-at-item-p)
+               (and (org-region-active-p)
+                    (save-excursion
+                      (goto-char (region-beginning))
+                      (org-at-item-p))))
+           (if (org-check-for-hidden 'items)
+               "Hidden subtree, open with TAB or use subtree command M-S-<left>/<right>"
+             "Outdent a local list item"))
+          (t "Backward word")))
+  :transient t
+  (interactive)
+  (org-metaleft))
+
+;;;###autoload (autoload 'org-extra-metaright "org-extra" nil t)
+(transient-define-suffix org-extra-metaright ()
+  "Demote heading, list item at point or move table column right."
+  :key "M-<right>"
+  :inapt-if (lambda ()
+              (cond ((or (org-at-table-p)
+                         (org-at-drawer-p)
+                         (org-at-block-p))
+                     nil)
+                    ((org-with-limited-levels
+                      (or (org-at-heading-p)
+                          (and (org-region-active-p)
+                               (save-excursion
+                                 (goto-char (region-beginning))
+                                 (org-at-heading-p)))))
+                     (org-check-for-hidden 'headlines))
+                    ((org-at-heading-p) nil)
+                    ((or (org-at-item-p)
+                         (and (org-region-active-p)
+                              (save-excursion
+                                (goto-char (region-beginning))
+                                (org-at-item-p))))
+                     (org-check-for-hidden 'items))))
+  :description
+  (lambda ()
+    (cond ((org-at-table-p)
+           (let ((colname (or (org-extra-get-current-column-name)
+                              (org-table-current-column))))
+             (format "Move column `%s' right" colname)))
+          ((org-at-drawer-p)
+           "Indent the drawer at point")
+          ((org-at-block-p)
+           "Indent the block at point")
+          ((org-with-limited-levels
+            (or (org-at-heading-p)
+                (and (org-region-active-p)
+                     (save-excursion
+                       (goto-char (region-beginning))
+                       (org-at-heading-p)))))
+           (if (org-check-for-hidden 'headlines)
+               "Hidden subtree, open with TAB or use subtree command M-S-<left>/<right>"
+             (org-extra--get-denote-description "Denote")))
+          ;; At an inline task.
+          ((org-at-heading-p)
+           (org-extra--get-denote-description "Denote"))
+          ((or (org-at-item-p)
+               (and (org-region-active-p)
+                    (save-excursion
+                      (goto-char (region-beginning))
+                      (org-at-item-p))))
+           (if (org-check-for-hidden 'items)
+               "Hidden subtree, open with TAB or use subtree command M-S-<left>/<right>"
+             "Indent a local list item"))
+          (t "Forward word")))
+  :transient t
+  (interactive)
+  (org-metaright))
+
+;;;###autoload (autoload 'org-extra-shiftmetaleft "org-extra" nil t)
+(transient-define-suffix org-extra-shiftmetaleft ()
+  "Promote subtree or delete table column."
+  :key "M-S-<left>"
+  :inapt-if (lambda ()
+              (cond ((and (eq system-type 'darwin)
+                          (or (eq org-support-shift-select 'always)
+                              (and org-support-shift-select
+                                   (org-region-active-p))))
+                     nil)
+                    ((org-at-table-p) nil)
+                    ((org-at-heading-p) nil)
+                    ((if (not (org-region-active-p))
+                         (org-at-item-p)
+                       (save-excursion
+                         (goto-char (region-beginning))
+                         (org-at-item-p)))
+                     (let ((regionp (org-region-active-p)))
+                       (cond ((or (org-at-item-p)
+                                  (and regionp
+                                       (save-excursion
+                                         (goto-char (region-beginning))
+                                         (org-at-item-p))))
+                              nil)
+                             (t t))))
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and (eq system-type 'darwin)
+                (or (eq org-support-shift-select 'always)
+                    (and org-support-shift-select (org-region-active-p))))
+           "Select char backward")
+          ((org-at-table-p)
+           (let ((colname (or (org-extra-get-current-column-name)
+                              (org-table-current-column))))
+             (format "Delete column `%s'" colname)))
+          ((org-at-heading-p)
+           (org-extra--get-promote-description "Promote subtree"))
+          ((if (not (org-region-active-p))
+               (org-at-item-p)
+             (save-excursion
+               (goto-char (region-beginning))
+               (org-at-item-p)))
+           "Outdent a list item with children")
+          (t "org-shiftmetaleft")))
+  :transient t
+  (interactive)
+  (org-shiftmetaleft))
+
+;;;###autoload (autoload 'org-extra-shiftmetaright "org-extra" nil t)
+(transient-define-suffix org-extra-shiftmetaright ()
+  "Demote subtree or insert table column."
+  :key "M-S-<right>"
+  :inapt-if (lambda ()
+              (cond ((and (eq system-type 'darwin)
+                          (or (eq org-support-shift-select 'always)
+                              (and org-support-shift-select
+                                   (org-region-active-p))))
+                     nil)
+                    ((org-at-table-p) nil)
+                    ((org-at-heading-p) nil)
+                    ((if (not (org-region-active-p))
+                         (org-at-item-p)
+                       (save-excursion
+                         (goto-char (region-beginning))
+                         (org-at-item-p)))
+                     (let ((regionp (org-region-active-p)))
+                       (cond ((or (org-at-item-p)
+                                  (and regionp
+                                       (save-excursion
+                                         (goto-char (region-beginning))
+                                         (org-at-item-p)))))
+                             (t t))))
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and (eq system-type 'darwin)
+                (or (eq org-support-shift-select 'always)
+                    (and org-support-shift-select (org-region-active-p))))
+           "Select next char")
+          ((org-at-table-p)
+           (let ((colname (or (org-extra-get-current-column-name)
+                              (org-table-current-column))))
+             (format "Insert column `%s'" colname)))
+          ((org-at-heading-p)
+           (org-extra--get-denote-description "Denote subtree"))
+          ((if (not (org-region-active-p))
+               (org-at-item-p)
+             (save-excursion
+               (goto-char (region-beginning))
+               (org-at-item-p)))
+           "Indent a list item with children.")
+          (t "org-shiftmetaright")))
+  :transient t
+  (interactive)
+  (org-shiftmetaright))
+
+
 ;;;###autoload (autoload 'org-extra-c-x-menu "org-extra" nil t)
 (transient-define-prefix org-extra-c-x-menu ()
   "Provide toggle, navigation, timer, and clock actions for Org mode."
@@ -3122,7 +3360,12 @@ OFF-LABEL. It has no default value."
     ("ie" "structure-template" org-insert-structure-template)
     ("ia" "heading-after-current" org-insert-heading-after-current)
     ("C-<return>" "heading-respect-content" org-insert-heading-respect-content)
-    ("ir" "todo-heading-respect-content" org-insert-todo-heading-respect-content)]
+    ("ir" "todo-heading-respect-content" org-insert-todo-heading-respect-content)
+    ""
+    (org-extra-metaleft)
+    (org-extra-metaright)
+    (org-extra-shiftmetaleft)
+    (org-extra-shiftmetaright)]
    [("g" "Get news from all feeds " org-feed-update-all)
     ("G" "Go to the inbox of a feed..." org-feed-goto-inbox)
     ("c" "Clock/Timer" org-extra-menu-clock :transient nil)
@@ -3147,43 +3390,7 @@ OFF-LABEL. It has no default value."
            (ignore-errors
              (org-at-table-p))
            "Cut Rectangle"
-         (propertize "Cut Rectangle" 'face 'transient-inapt-suffix))))]
-   [("M-<left>" org-metaleft
-     :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Promote Heading"
-         (propertize "Promote Heading" 'face 'transient-inapt-suffix)))
-     :transient t)
-    ("M-S-<left>" org-shiftmetaleft
-     :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Promote Subtree"
-         (propertize "Promote Subtree" 'face 'transient-inapt-suffix)))
-     :transient t)
-    ("M-<right>" org-metaright
-     :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Demote Heading"
-         (propertize "Demote Heading" 'face 'transient-inapt-suffix)))
-     :transient t)
-    ("M-S-<right>" org-shiftmetaright
-     :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-in-subtree-not-table-p))
-           "Demote Subtree"
-         (propertize "Demote Subtree" 'face 'transient-inapt-suffix)))
-     :transient t)]]
+         (propertize "Cut Rectangle" 'face 'transient-inapt-suffix))))]]
   (interactive)
   (require 'org-colview)
   (transient-setup #'org-extra-c-x-menu))
