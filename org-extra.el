@@ -1592,15 +1592,9 @@ OFF-LABEL. It has no default value."
 ;;;###autoload (autoload 'org-extra-change-date-menu "org-extra" nil t)
 (transient-define-prefix org-extra-change-date-menu ()
   "Define a transient menu for changing dates in Org mode."
-    :refresh-suffixes t
-  [("d" "1 Day Later (S-<right>)" org-shiftright :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-at-timestamp-p 'lax))))
-   ("a" "1 Day Earlier (S-<left>)" org-shiftleft :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-at-timestamp-p 'lax))))
+  :refresh-suffixes t
+  [("d" org-extra-shiftright)
+   ("a" org-extra-shiftleft)
    ("l" "1 ... Later (S-<up>)" org-shiftup :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -1711,43 +1705,15 @@ OFF-LABEL. It has no default value."
 ;;;###autoload (autoload 'org-extra-select-keyword-menu "org-extra" nil t)
 (transient-define-prefix org-extra-select-keyword-menu ()
   "Navigate Org keywords with transient menu options."
-  [("n" "Next keyword (S-<right>)" org-shiftright
-    :transient t
-    :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-at-heading-p))))
-   ("p" "Previous keyword (S-<left>)" org-shiftleft
-    :transient t
-    :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-at-heading-p))))
+  [("n" org-extra-shiftright)
+   ("p" org-extra-shiftleft)
    ("c" "Complete Keyword" pcomplete :inapt-if-not
     (lambda ()
       (ignore-errors
         (assq :todo-keyword
               (org-context)))))
-   ("e" "Next keyword set (C-S-<right>)" org-shiftcontrolright
-    :transient t
-    :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (and
-         (>
-          (length org-todo-sets)
-          1)
-         (org-at-heading-p)))))
-   ("r" "Previous keyword set (C-S-<right>)" org-shiftcontrolright
-    :transient t
-    :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (and
-         (>
-          (length org-todo-sets)
-          1)
-         (org-at-heading-p)))))])
+   ("e" org-extra-shiftcontrolright)
+   ("r" org-extra-shiftcontrolleft)])
 
 ;;;###autoload (autoload 'org-extra-hyperlinks-menu "org-extra" nil t)
 (transient-define-prefix org-extra-hyperlinks-menu ()
@@ -2675,28 +2641,21 @@ OFF-LABEL. It has no default value."
 
 ;;;###autoload (autoload 'org-extra-menu-changedate "org-extra" nil t)
 (transient-define-prefix org-extra-menu-changedate ()
-   "Transient menu for Change Date commands." :refresh-suffixes t
+  "Transient menu for Change Date commands."
+  :refresh-suffixes t
   ["org -> Dates and Scheduling -> Change Date"
-   [("d" org-shiftright :description
-     (lambda () 			 (if
-           (ignore-errors
-             (org-at-timestamp-p 'lax))
-           "1 Day Later"
-         (propertize "1 Day Later" 'face 'transient-inapt-suffix))))
-    ("D" org-shiftleft :description
-     (lambda () 			 (if
-           (ignore-errors
-             (org-at-timestamp-p 'lax))
-           "1 Day Earlier"
-         (propertize "1 Day Earlier" 'face 'transient-inapt-suffix))))
+   [("d" org-extra-shiftright)
+    ("D" org-extra-shiftleft)
     ("l" org-shiftup :description
-     (lambda () 			 (if
+     (lambda ()
+       (if
            (ignore-errors
              (org-at-timestamp-p 'lax))
            "1 ... Later"
          (propertize "1 ... Later" 'face 'transient-inapt-suffix))))
     ("e" org-shiftdown :description
-     (lambda () 			 (if
+     (lambda ()
+       (if
            (ignore-errors
              (org-at-timestamp-p 'lax))
            "1 ... Earlier"
@@ -2793,51 +2752,21 @@ OFF-LABEL. It has no default value."
 
 ;;;###autoload (autoload 'org-extra-menu-selectkeyword "org-extra" nil t)
 (transient-define-prefix org-extra-menu-selectkeyword ()
-   "Transient menu for Select keyword commands." :refresh-suffixes t
+  "Transient menu for Select keyword commands."
+  :refresh-suffixes t
   ["org -> TODO Lists -> Select keyword"
-   [("n" org-shiftright :description
-     (lambda () 			 (if
-           (ignore-errors
-             (org-at-heading-p))
-           "Next keyword"
-         (propertize "Next keyword" 'face 'transient-inapt-suffix)))
-     :transient t)
-    ("p" org-shiftleft :description
-     (lambda () 			 (if
-           (ignore-errors
-             (org-at-heading-p))
-           "Previous keyword"
-         (propertize "Previous keyword" 'face 'transient-inapt-suffix)))
-     :transient t)
+   [("n" org-exrta-shiftright)
+    ("p" org-extra-shiftleft)
     ("c" pcomplete :description
-     (lambda () 			 (if
+     (lambda ()
+       (if
            (ignore-errors
              (assq :todo-keyword
                    (org-context)))
            "Complete Keyword"
          (propertize "Complete Keyword" 'face 'transient-inapt-suffix))))
-    ("N" org-shiftcontrolright :description
-     (lambda () 			 (if
-           (ignore-errors
-             (and
-              (>
-               (length org-todo-sets)
-               1)
-              (org-at-heading-p)))
-           "Next keyword set"
-         (propertize "Next keyword set" 'face 'transient-inapt-suffix)))
-     :transient t)
-    ("P" org-shiftcontrolright :description
-     (lambda () 			 (if
-           (ignore-errors
-             (and
-              (>
-               (length org-todo-sets)
-               1)
-              (org-at-heading-p)))
-           "Previous keyword set"
-         (propertize "Previous keyword set" 'face 'transient-inapt-suffix)))
-     :transient t)]])
+    ("N" org-extra-shiftcontrolright)
+    ("P" org-extra-shiftcontrolleft)]])
 
 
 ;;;###autoload (autoload 'org-extra-menu-hyperlinks "org-extra" nil t)
@@ -3283,7 +3212,8 @@ Argument PREFIX is a string that will be prepended to the description."
                                   (and regionp
                                        (save-excursion
                                          (goto-char (region-beginning))
-                                         (org-at-item-p)))))
+                                         (org-at-item-p))))
+                              nil)
                              (t t))))
                     (t t)))
   :description
@@ -3309,6 +3239,240 @@ Argument PREFIX is a string that will be prepended to the description."
   (interactive)
   (org-shiftmetaright))
 
+(transient-define-suffix org-extra-shiftleft (&optional arg)
+  "Act on current element according to context.
+This does one of the following:
+
+- switch a timestamp at point one day into the past
+- on a headline, switch to the previous TODO keyword.
+- on an item, switch entire list to the previous bullet type
+- on a property line, switch to the previous allowed value
+- on a clocktable definition line, move time block into the past
+- in a table, move a single cell left
+
+This function runs the functions in `org-shiftleft-hook' one by
+one as a first step, and exits immediately if a function from the
+hook returns non-nil.  In the absence of a specific context, the
+function runs `org-shiftleft-final-hook' using the same logic.
+
+If none of the above succeeds and `org-support-shift-select' is
+non-nil, runs `shift-select-mode' specific command.  See that
+variable for more information."
+  :key "S-<left>"
+  :inapt-if (lambda ()
+              (cond ((and org-support-shift-select (org-region-active-p))
+                     nil)
+                    ((org-at-timestamp-p 'lax) nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-heading-p))
+                     nil)
+                    ((or (and org-support-shift-select
+                              (not (eq org-support-shift-select 'always))
+                              (org-at-item-bullet-p))
+                         (and (not org-support-shift-select)
+                              (org-at-item-p)))
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-property-p))
+                     nil)
+                    ((looking-at
+                      "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>.*?:block[ \t]+\\(\\S-+\\)")
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-table-p))
+                     nil)
+                    (org-support-shift-select
+                     nil)
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and org-support-shift-select (org-region-active-p))
+           "Select backward char")
+          ((org-at-timestamp-p 'lax)
+           "1 Day Earlier")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-heading-p))
+           (let ((org-inhibit-logging
+                  (not org-treat-S-cursor-todo-selection-as-state-change))
+                 (org-inhibit-blocking
+                  (not org-treat-S-cursor-todo-selection-as-state-change)))
+             "Change TODO state"))
+          ((or (and org-support-shift-select
+                    (not (eq org-support-shift-select 'always))
+                    (org-at-item-bullet-p))
+               (and (not org-support-shift-select)
+                    (org-at-item-p)))
+           "Cycle `-'  ->  `+'  ->  `*'  ->  `1.'  ->  `1")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-property-p))
+           "Previous allowed value for this property")
+          ((looking-at
+            "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>.*?:block[ \t]+\\(\\S-+\\)")
+           "Shift the time block")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-table-p))
+           "Move a single cell left")
+          (org-support-shift-select
+           "Select backward char")
+          (t "org-shiftleft")))
+  :transient t
+  (interactive "P")
+  (org-shiftleft arg))
+
+(transient-define-suffix org-extra-shiftright (&optional arg)
+  "Act on the current element according to context.
+This does one of the following:
+
+- switch a timestamp at point one day into the future
+- on a headline, switch to the next TODO keyword
+- on an item, switch entire list to the next bullet type
+- on a property line, switch to the next allowed value
+- on a clocktable definition line, move time block into the future
+- in a table, move a single cell right
+
+This function runs the functions in `org-shiftright-hook' one by
+one as a first step, and exits immediately if a function from the
+hook returns non-nil.  In the absence of a specific context, the
+function runs `org-shiftright-final-hook' using the same logic.
+
+If none of the above succeeds and `org-support-shift-select' is
+non-nil, runs `shift-select-mode' specific command.  See that
+variable for more information."
+  :key "S-<right>"
+  :inapt-if (lambda ()
+              (cond ((and org-support-shift-select (org-region-active-p))
+                     nil)
+                    ((org-at-timestamp-p 'lax) nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-heading-p))
+                     nil)
+                    ((or (and org-support-shift-select
+                              (not (eq org-support-shift-select 'always))
+                              (org-at-item-bullet-p))
+                         (and (not org-support-shift-select)
+                              (org-at-item-p)))
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-property-p))
+                     nil)
+                    ((looking-at
+                      "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>.*?:block[ \t]+\\(\\S-+\\)")
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-table-p))
+                     nil)
+                    (org-support-shift-select
+                     nil)
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and org-support-shift-select (org-region-active-p))
+           "Select next char")
+          ((org-at-timestamp-p 'lax)
+           "1 day Later")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-heading-p))
+           (let ((org-inhibit-logging
+                  (not org-treat-S-cursor-todo-selection-as-state-change))
+                 (org-inhibit-blocking
+                  (not org-treat-S-cursor-todo-selection-as-state-change)))
+             "Select next TODO"))
+          ((or (and org-support-shift-select
+                    (not (eq org-support-shift-select 'always))
+                    (org-at-item-bullet-p))
+               (and (not org-support-shift-select)
+                    (org-at-item-p)))
+           "Cycle `-'  ->  `+'  ->  `*'  ->  `1.'  ->  `1")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-property-p))
+           "Next allowed value for this property")
+          ((looking-at
+            "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>.*?:block[ \t]+\\(\\S-+\\)")
+           "Shift the time block")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-table-p))
+           "Move a single cell right")
+          (org-support-shift-select
+           "Select next char")
+          (t "org-shiftright")))
+  :transient t
+  (interactive "P")
+  (org-shiftright arg))
+
+(transient-define-suffix org-extra-shiftcontrolright ()
+  "Switch to next TODO set."
+  :key "C-S-<right>"
+  :inapt-if (lambda ()
+              (cond ((and org-support-shift-select (org-region-active-p))
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-heading-p)
+                          (ignore-errors (and
+                                          (>
+                                           (length org-todo-sets)
+                                           1))))
+                     nil)
+                    (org-support-shift-select
+                     nil)
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and org-support-shift-select (org-region-active-p))
+           "Select next word")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-heading-p))
+           "Select next TODO")
+          (org-support-shift-select
+           "Select next word")
+          (t "org-shiftcontrolright")))
+  :transient t
+  (interactive)
+  (org-shiftcontrolright))
+
+(transient-define-suffix org-extra-shiftcontrolleft ()
+  "Switch to previous TODO set."
+  :key "C-S-<left>"
+  :inapt-if (lambda ()
+              (cond ((and org-support-shift-select (org-region-active-p))
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-heading-p)
+                          (ignore-errors (and
+                                          (>
+                                           (length org-todo-sets)
+                                           1))))
+                     nil)
+                    (org-support-shift-select
+                     nil)
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and org-support-shift-select (org-region-active-p))
+           "Select previous word")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-heading-p))
+           "Select previous TODO")
+          (org-support-shift-select
+           "Select previous word")
+          (t "org-shiftcontrolleft")))
+  :transient t
+  (interactive)
+  (org-shiftcontrolleft))
+
+
+;;;###autoload (autoload 'org-extra-dwim-menu "org-extra" nil t)
+(transient-define-prefix org-extra-dwim-menu ()
+  "Org-Extra."
+  :transient-non-suffix #'transient--do-stay
+  :refresh-suffixes t
+  [[(org-extra-metaleft)
+    (org-extra-metaright)
+    (org-extra-shiftmetaleft)
+    (org-extra-shiftmetaright)
+    (org-extra-shiftleft)
+    (org-extra-shiftright)
+    (org-extra-shiftcontrolleft)
+    (org-extra-shiftcontrolright)]])
 
 ;;;###autoload (autoload 'org-extra-c-x-menu "org-extra" nil t)
 (transient-define-prefix org-extra-c-x-menu ()
