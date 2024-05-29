@@ -2625,7 +2625,8 @@ Argument PREFIX is a string that will be prepended to the description."
   (let* ((heading (org-get-heading t t t t))
          (face (and heading (get-text-property 0 'face heading)))
          (heading-asterix (propertize
-                           (org-extra--get-current-heading-asterix)
+                           (or (org-extra--get-current-heading-asterix)
+                               " ")
                            'face
                            face))
          (short-heading
@@ -3372,6 +3373,7 @@ more information."
 (transient-define-suffix org-extra-toggle-heading ()
   "Convert headings to normal text, or items or text to headings."
   :key "*"
+  :transient t
   :description "Headings => normal text"
   (interactive)
   (org-toggle-heading))
@@ -3379,6 +3381,7 @@ more information."
 (transient-define-suffix org-extra-toggle-item ()
   "Convert headings or normal lines to items, items to normal lines."
   :key "="
+  :transient t
   :description "Headings => normal lines => list"
   (interactive)
   (call-interactively #'org-toggle-item))
