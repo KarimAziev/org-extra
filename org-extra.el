@@ -3465,11 +3465,12 @@ more information."
     ("i f" "Footnote new/jump" org-footnote-action)
     ("i d" "Insert Drawer" org-insert-drawer)
     ("i p" org-extra-insert-properties-drawer)
-    ("i i" "Insert Item" org-insert-item)
+    ("i i" "Insert Item" org-insert-item :inapt-if-not org-in-item-p)
     ("i x" "Insert Checkbox"
      (lambda ()
        (interactive)
-       (org-insert-item t)))
+       (org-insert-item t))
+     :inapt-if-not org-in-item-p)
     ("i l" "Insert Link" org-insert-link)
     ("i L" "Insert All Links" org-insert-all-links :inapt-if-nil
      org-stored-links)
