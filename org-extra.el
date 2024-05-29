@@ -1593,16 +1593,10 @@ OFF-LABEL. It has no default value."
 (transient-define-prefix org-extra-change-date-menu ()
   "Define a transient menu for changing dates in Org mode."
   :refresh-suffixes t
-  [("d" org-extra-shiftright)
-   ("a" org-extra-shiftleft)
-   ("l" "1 ... Later (S-<up>)" org-shiftup :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-at-timestamp-p 'lax))))
-   ("e" "1 ... Earlier (S-<down>)" org-shiftdown :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (org-at-timestamp-p 'lax))))])
+  [("<right>" org-extra-shiftright)
+   ("<left>" org-extra-shiftleft)
+   ("<up>" org-extra-shiftup)
+   ("<down>" org-extra-shiftdown)])
 
 ;;;###autoload (autoload 'org-extra-tags-and-properties-menu "org-extra" nil t)
 (transient-define-prefix org-extra-tags-and-properties-menu ()
@@ -1696,8 +1690,8 @@ OFF-LABEL. It has no default value."
        "(" ")"))
     :transient t)
    ("p" "Set Priority (C-c ,)" org-priority)
-   ("r" "Priority Up (S-<up>)" org-shiftup :transient t)
-   ("i" "Priority Down (S-<down>)" org-shiftdown :transient t)
+   ("r" org-extra-shiftup)
+   ("i" org-extra-shiftdown)
    ("n" "Get news from all feeds (C-c C-x g)" org-feed-update-all)
    ("b" "Go to the inbox of a feed... (C-c C-x G)" org-feed-goto-inbox)
    ("c" "Customize feeds" org-extra-customize-feed)])
@@ -2646,20 +2640,8 @@ OFF-LABEL. It has no default value."
   ["org -> Dates and Scheduling -> Change Date"
    [("d" org-extra-shiftright)
     ("D" org-extra-shiftleft)
-    ("l" org-shiftup :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-at-timestamp-p 'lax))
-           "1 ... Later"
-         (propertize "1 ... Later" 'face 'transient-inapt-suffix))))
-    ("e" org-shiftdown :description
-     (lambda ()
-       (if
-           (ignore-errors
-             (org-at-timestamp-p 'lax))
-           "1 ... Earlier"
-         (propertize "1 ... Earlier" 'face 'transient-inapt-suffix))))]])
+    ("l" org-extra-shiftup)
+    ("e" org-extra-shiftdown)]])
 
 
 ;;;###autoload (autoload 'org-extra-menu-tagsandproperties "org-extra" nil t)
@@ -2740,8 +2722,8 @@ OFF-LABEL. It has no default value."
      :transient t)
     ""
     ("," "Set Priority" org-priority)
-    ("p" "Priority Up" org-shiftup :transient t)
-    ("P" "Priority Down" org-shiftdown :transient t)
+    ("p" org-extra-shiftup)
+    ("P" org-extra-shiftdown)
     ""
     ("G" "Get news from all feeds" org-feed-update-all)
     ("T" "Go to the inbox of a feed..." org-feed-goto-inbox)
@@ -3459,6 +3441,132 @@ variable for more information."
   (interactive)
   (org-shiftcontrolleft))
 
+(transient-define-suffix org-extra-shiftup ()
+  "Act on current element according to context.
+Call `org-timestamp-up' or `org-priority-up', or
+`org-previous-item', or `org-table-move-cell-up'.  See the
+individual commands for more information.
+
+This function runs the functions in `org-shiftup-hook' one by one
+as a first step, and exits immediately if a function from the
+hook returns non-nil.  In the absence of a specific context, the
+function also runs `org-shiftup-final-hook' using the same logic.
+
+If none of the previous steps succeed and
+`org-support-shift-select' is non-nil, the function runs
+`shift-select-mode' associated command.  See that variable for
+more information."
+  :key "S-<up>"
+  :inapt-if (lambda ()
+              (cond ((and org-support-shift-select (org-region-active-p))
+                     nil)
+                    ((org-at-timestamp-p 'lax)
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          org-priority-enable-commands
+                          (org-at-heading-p))
+                     nil)
+                    ((and (not org-support-shift-select)
+                          (org-at-item-p))
+                     nil)
+                    ((org-match-line "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>") nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-table-p))
+                     nil)
+                    (org-support-shift-select
+                     nil)
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and org-support-shift-select (org-region-active-p))
+           "Mark previous line")
+          ((org-at-timestamp-p 'lax)
+           (if org-edit-timestamp-down-means-later
+               "Decrease the date"
+             "Increase the date"))
+          ((and (not (eq org-support-shift-select 'always))
+                org-priority-enable-commands
+                (org-at-heading-p))
+           "Priority Up")
+          ((and (not org-support-shift-select)
+                (org-at-item-p))
+           "Move to the beginning of the previous item")
+          ((org-match-line "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>")
+           "Shift timeblock")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-table-p))
+           "Move cell up")
+          (org-support-shift-select
+           "Mark previous line")
+          (t "org-shiftup")))
+  :transient t
+  (interactive)
+  (org-shiftup))
+
+(transient-define-suffix org-extra-shiftdown ()
+  "Act on current element according to context.
+Call `org-timestamp-down' or `org-priority-down', or
+`org-next-item', or `org-table-move-cell-down'.  See the
+individual commands for more information.
+
+This function runs the functions in `org-shiftdown-hook' one by
+one as a first step, and exits immediately if a function from the
+hook returns non-nil.  In the absence of a specific context, the
+function also runs `org-shiftdown-final-hook' using the same
+logic.
+
+If none of the previous steps succeed and
+`org-support-shift-select' is non-nil, the function runs
+`shift-select-mode' associated command.  See that variable for
+more information."
+  :key "S-<down>"
+  :inapt-if (lambda ()
+              (cond ((and org-support-shift-select (org-region-active-p))
+                     nil)
+                    ((org-at-timestamp-p 'lax)
+                     nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          org-priority-enable-commands
+                          (org-at-heading-p))
+                     nil)
+                    ((and (not org-support-shift-select)
+                          (org-at-item-p))
+                     nil)
+                    ((org-match-line "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>") nil)
+                    ((and (not (eq org-support-shift-select 'always))
+                          (org-at-table-p))
+                     nil)
+                    (org-support-shift-select
+                     nil)
+                    (t t)))
+  :description
+  (lambda ()
+    (cond ((and org-support-shift-select (org-region-active-p))
+           "Mark next line")
+          ((org-at-timestamp-p 'lax)
+           (if org-edit-timestamp-down-means-later
+               :description
+             "Increase the date"
+             "Decrease the date"))
+          ((and (not (eq org-support-shift-select 'always))
+                org-priority-enable-commands
+                (org-at-heading-p))
+           "Priority Down")
+          ((and (not org-support-shift-select)
+                (org-at-item-p))
+           "Move to the next item")
+          ((org-match-line "^[ \t]*#\\+BEGIN:[ \t]+clocktable\\>")
+           "Shift timeblock")
+          ((and (not (eq org-support-shift-select 'always))
+                (org-at-table-p))
+           "Move a cell down")
+          (org-support-shift-select
+           "Mark next line")
+          (t "org-shiftdown")))
+  :transient t
+  (interactive)
+  (org-shiftdown))
+
 
 ;;;###autoload (autoload 'org-extra-dwim-menu "org-extra" nil t)
 (transient-define-prefix org-extra-dwim-menu ()
@@ -3472,7 +3580,9 @@ variable for more information."
     (org-extra-shiftleft)
     (org-extra-shiftright)
     (org-extra-shiftcontrolleft)
-    (org-extra-shiftcontrolright)]])
+    (org-extra-shiftcontrolright)]
+   [(org-extra-shiftup)
+    (org-extra-shiftdown)]])
 
 ;;;###autoload (autoload 'org-extra-c-x-menu "org-extra" nil t)
 (transient-define-prefix org-extra-c-x-menu ()
@@ -3529,15 +3639,23 @@ variable for more information."
     (org-extra-metaleft)
     (org-extra-metaright)
     (org-extra-shiftmetaleft)
-    (org-extra-shiftmetaright)]
+    (org-extra-shiftmetaright)
+    (org-extra-shiftleft)
+    (org-extra-shiftright)
+    (org-extra-shiftcontrolleft)
+    (org-extra-shiftcontrolright)
+    ""
+    (org-extra-shiftup)
+    (org-extra-shiftdown)]
    [("g" "Get news from all feeds " org-feed-update-all)
     ("G" "Go to the inbox of a feed..." org-feed-goto-inbox)
     ("c" "Clock/Timer" org-extra-menu-clock :transient nil)
     ("C-c" org-extra-columns-toggle :description
      (lambda ()
-       (org-extra--bar-make-toggle-description "Column view of properties"
-                                               org-columns-current-fmt "+"
-                                               "" "[" "]")))
+       (org-extra--bar-make-toggle-description
+        "Column view of properties"
+        org-columns-current-fmt "+"
+        "" "[" "]")))
     ("C-y" "Paste special" org-paste-special)
     ("M-w" org-copy-special :description
      (lambda ()
