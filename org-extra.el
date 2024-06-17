@@ -3620,7 +3620,7 @@ is embedded as a base64-encoded string.
 
 Usage example:
 
-\\=(org-link-set-parameters \"file\ :export \\='org-extra-export-inline-images)x"
+\\=(org-link-set-parameters \"file\ :export \\='org-extra-export-inline-images)"
   (unless desc
     (let ((ext (file-name-extension path)))
       (cond ((and (eq backend 'html)
@@ -3634,8 +3634,6 @@ Usage example:
                 (base64-encode-region (point-min)
                                       (point-max) t)
                 (buffer-string))))))))
-
-
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
