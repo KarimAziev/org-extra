@@ -147,6 +147,28 @@
            (symbol :tag "Other"))
           :value-type (string :tag "Org babel language")))
 
+(defcustom org-extra-allowed-inline-images-file-extensions '("png"
+                                                             "jpg"
+                                                             "jpeg"
+                                                             "gif"
+                                                             "svg"
+                                                             "bmp"
+                                                             "webp")
+  "A list of file extensions allowed for inline images in Org mode.
+
+Each element in the list should be a string representing a file
+extension, such as \"png\" or \"jpg\".
+
+This list is used to determine which image files can be embedded
+as base64-encoded images in HTML exports.
+
+
+Usage example:
+
+\\=(org-link-set-parameters \"file\ :export \\='org-extra-export-inline-images)"
+  :group 'org-extra
+  :type '(repeat (string :tag "File extension")))
+
 (defmacro org-extra-csetq (&rest args)
   "Set custom variables using their `custom-set' function or `set-default'.
 
@@ -3580,6 +3602,38 @@ more information."
   (org-table-map-tables
    #'org-extra-table-maybe-shrink
    t))
+
+(defun org-extra-export-inline-images (path desc backend &rest _)
+  "Embed base64-encoded images in HTML if the file extension is allowed.
+
+Argument PATH is the file path of the image to be embedded.
+
+Argument DESC is the description of the image, which can be nil.
+
+Argument BACKEND specifies the export backend, such as html.
+
+Remaining arguments _ are ignored.
+
+If the file extension of PATH is in
+`org-extra-allowed-inline-images-file-extensions' and BACKEND is html, the image
+is embedded as a base64-encoded string.
+
+Usage example:
+
+\\=(org-link-set-parameters \"file\ :export \\='org-extra-export-inline-images)x"
+  (unless desc
+    (let ((ext (file-name-extension path)))
+      (cond ((and (eq backend 'html)
+                  (member ext
+                          org-extra-allowed-inline-images-file-extensions))
+             (format
+              "<img src=\"data:image/%s;base64,%s\">"
+              ext
+              (with-temp-buffer
+                (insert-file-contents-literally path)
+                (base64-encode-region (point-min)
+                                      (point-max) t)
+                (buffer-string))))))))
 
 
 
