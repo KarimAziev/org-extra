@@ -3603,6 +3603,20 @@ more information."
    #'org-extra-table-maybe-shrink
    t))
 
+(defvar org-extra-file-extensions-mime-type-alist
+  '(("png" . "image/png")
+    ("jpg" . "image/jpeg")
+    ("jpeg" . "image/jpeg")
+    ("gif" . "image/gif")
+    ("svg" . "image/svg+xml")
+    ("bmp" . "image/bmp")
+    ("webp" . "image/webp")
+    ("tiff" . "image/tiff")
+    ("ico" . "image/x-icon")
+    ("heic" . "image/heic")
+    ("avif" . "image/avif")
+    ("pdf" . "application/pdf")))
+
 (defun org-extra-export-inline-images (path desc backend &rest _)
   "Embed base64-encoded images in HTML if the file extension is allowed.
 
@@ -3627,8 +3641,10 @@ Usage example:
                   (member ext
                           org-extra-allowed-inline-images-file-extensions))
              (format
-              "<img src=\"data:image/%s;base64,%s\">"
-              ext
+              "<img src=\"data:%s;base64,%s\">"
+              (or
+               (cdr (assoc ext org-extra-file-extensions-mime-type-alist))
+               (format "image/%s" ext))
               (with-temp-buffer
                 (insert-file-contents-literally path)
                 (base64-encode-region (point-min)
