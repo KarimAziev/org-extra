@@ -147,28 +147,6 @@
            (symbol :tag "Other"))
           :value-type (string :tag "Org babel language")))
 
-(defcustom org-extra-allowed-inline-images-file-extensions '("png"
-                                                             "jpg"
-                                                             "jpeg"
-                                                             "gif"
-                                                             "svg"
-                                                             "bmp"
-                                                             "webp")
-  "A list of file extensions allowed for inline images in Org mode.
-
-Each element in the list should be a string representing a file
-extension, such as \"png\" or \"jpg\".
-
-This list is used to determine which image files can be embedded
-as base64-encoded images in HTML exports.
-
-
-Usage example:
-
-\\=(org-link-set-parameters \"file\ :export \\='org-extra-export-inline-images)"
-  :group 'org-extra
-  :type '(repeat (string :tag "File extension")))
-
 (defmacro org-extra-csetq (&rest args)
   "Set custom variables using their `custom-set' function or `set-default'.
 
@@ -3603,6 +3581,8 @@ more information."
    #'org-extra-table-maybe-shrink
    t))
 
+
+
 (defvar org-extra-file-extensions-mime-type-alist
   '(("png" . "image/png")
     ("jpg" . "image/jpeg")
@@ -3615,33 +3595,35 @@ more information."
     ("ico" . "image/x-icon")
     ("heic" . "image/heic")
     ("avif" . "image/avif")
-    ("pdf" . "application/pdf")))
+    ("pdf" . "application/pdf")
+    ("tif" . "image/tiff")))
 
+(defvar org-export-default-inline-image-rule)
 (defun org-extra-export-inline-images (path desc backend &rest _)
-  "Embed base64-encoded images in HTML if the file extension is allowed.
+  "Embed inline images if the export BACKEND is HTML and DESC is nil.
+
+Argument BACKEND specifies the export backend, such as HTML.
+
+Argument DESC is the description of the image. If it is non-nil, don't embed
+images.
 
 Argument PATH is the file path of the image to be embedded.
 
-Argument DESC is the description of the image, which can be nil.
-
-Argument BACKEND specifies the export backend, such as html.
-
-Remaining arguments _ are ignored.
-
-If the file extension of PATH is in
-`org-extra-allowed-inline-images-file-extensions' and BACKEND is html, the image
-is embedded as a base64-encoded string.
+If BACKEND is HTML, DESC is nil, and PATH matches
+`org-export-default-inline-image-rule', embed base64-encoded images; otherwise,
+the result is nil.
 
 Usage example:
 
-\\=(org-link-set-parameters \"file\ :export \\='org-extra-export-inline-images)"
-  (unless desc
+\\=(org-link-set-parameters \"file\" :export \\='org-extra-export-inline-images)"
+  (require 'ox)
+  (when (and (not desc)
+             (eq backend 'html)
+             (seq-find (pcase-lambda (`(,_k . ,v))
+                         (string-match-p v path))
+                       org-export-default-inline-image-rule))
     (let ((ext (file-name-extension path)))
-      (cond ((and (eq backend 'html)
-                  (member ext
-                          org-extra-allowed-inline-images-file-extensions))
-             (format
-              "<img src=\"data:%s;base64,%s\">"
+      (format "<img src=\"data:%s;base64,%s\">"
               (or
                (cdr (assoc ext org-extra-file-extensions-mime-type-alist))
                (format "image/%s" ext))
@@ -3649,7 +3631,7 @@ Usage example:
                 (insert-file-contents-literally path)
                 (base64-encode-region (point-min)
                                       (point-max) t)
-                (buffer-string))))))))
+                (buffer-string))))))
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
