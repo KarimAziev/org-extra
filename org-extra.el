@@ -3244,35 +3244,44 @@ Argument CMD is the command to be executed interactively.
 
 Optional argument PREFIX is a string to be prepended to the output."
   (let ((pos (point))
-        (marker (point-marker))
         (pos-line (line-beginning-position))
         (end-line (line-end-position))
         (content)
         (cursor-pos))
-    (unwind-protect
-        (save-excursion
-          (catch 'content
-            (atomic-change-group
-              (call-interactively cmd)
+    (save-excursion
+      (catch 'content
+        (atomic-change-group
+          (let ((ok t))
+            (condition-case nil
+                (call-interactively cmd)
+              (error (setq ok nil)))
+            (when ok
               (setq cursor-pos (point))
-              (font-lock-ensure (min pos pos-line (line-beginning-position))
+              (font-lock-ensure (min pos pos-line
+                                     (line-beginning-position))
                                 (max pos end-line (line-end-position)))
               (let* ((process-line (lambda (line &optional split)
-                                     (let ((splitted-lines (split-string line
-                                                                         "[\n]+"
-                                                                         nil))
+                                     (let ((splitted-lines
+                                            (split-string
+                                             line
+                                             "[\n]+"
+                                             nil))
                                            (left-lines)
                                            (right-lines))
                                        (when (and split
-                                                  (> (length splitted-lines) 4))
+                                                  (> (length
+                                                      splitted-lines)
+                                                     4))
                                          (setq left-lines (seq-take splitted-lines 2))
                                          (setq right-lines (reverse (seq-take (reverse splitted-lines) 2)))
                                          (setq splitted-lines (append left-lines right-lines)))
                                        (mapconcat
                                         (lambda (it)
-                                          (truncate-string-to-width it 50
+                                          (truncate-string-to-width it
+                                                                    50
                                                                     nil
-                                                                    nil t))
+                                                                    nil
+                                                                    t))
                                         splitted-lines
                                         "\n"))))
                      (left (funcall process-line (buffer-substring
@@ -3292,8 +3301,7 @@ Optional argument PREFIX is a string to be prepended to the output."
                               left
                               (propertize "<<$0>>" 'face 'cursor)
                               right)))
-              (throw 'content content))))
-      (goto-char marker))))
+              (throw 'content content))))))))
 
 
 
