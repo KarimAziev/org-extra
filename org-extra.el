@@ -3641,5 +3641,12 @@ Usage example:
                                       (point-max) t)
                 (buffer-string))))))
 
+(defun org-extra-babel-maybe-save-buffer ()
+  "Save the buffer if it has a file name, otherwise run `before-save-hook'."
+  (if (and buffer-file-name
+           (file-exists-p buffer-file-name))
+      (save-buffer)
+    (run-hooks 'before-save-hook)))
+
 (provide 'org-extra)
 ;;; org-extra.el ends here
