@@ -356,7 +356,7 @@ Usage:
            (mapconcat
             (lambda (elem)
               (or
-               (when-let ((val (and (cdr elem)
+               (when-let* ((val (and (cdr elem)
                                     (format "%s" (cdr elem)))))
                  (when (not (string-empty-p val))
                    (concat
@@ -424,7 +424,7 @@ Optional argument CHARS is like the inside of a [...] in a regular expression
 except that ] is never special and \ quotes ^, - or \ (but
  not at the end of a range; quoting is never needed there)"
   (unless chars (setq chars "_A-Za-z0-9"))
-  (when-let ((bounds (save-excursion
+  (when-let* ((bounds (save-excursion
                        (let* ((a (save-excursion
                                    (skip-chars-backward chars)
                                    (point)))
@@ -534,7 +534,7 @@ except that ] is never special and \ quotes ^, - or \ (but
 (defun org-extra-describe-eldoc-setting ()
   "Return description for current option in #+options."
   (when-let* ((option
-               (when-let ((w (car (split-string
+               (when-let* ((w (car (split-string
                                    (buffer-substring-no-properties
                                     (line-beginning-position)
                                     (line-end-position))
@@ -703,7 +703,7 @@ substitution."
                    (_ "Options for org-info.js")))
                 (_
                  (or
-                  (when-let ((descr
+                  (when-let* ((descr
                               (cdr
                                (assoc-string word
                                              (append
@@ -721,7 +721,7 @@ Call other documentation functions depending on lang when inside src body."
   (let ((res (or
               (org-extra-eldoc-get-breadcrumb)
               (org-extra-eldoc-get-src-header)
-              (when-let ((lang (org-extra-eldoc-get-src-lang)))
+              (when-let* ((lang (org-extra-eldoc-get-src-lang)))
                 (cond ((string= lang "org")	;Prevent inf-loop for Org src blocks
                        nil)
                       ((or
@@ -776,7 +776,7 @@ Call other documentation functions depending on lang when inside src body."
                    t 1))
           (when (re-search-forward
                  "#\\+\\(begin\\|end\\)_src\\($\\|[\s\f\t\n\r\v]\\)" nil t 1)
-            (when-let ((word (match-string-no-properties 1))
+            (when-let* ((word (match-string-no-properties 1))
                        (end (match-beginning 0)))
               (setq word (downcase word))
               (when (string= word "end")
@@ -976,7 +976,7 @@ Beginning and end is bounds of inner content. For example: (example 4292 4486)."
           (when (re-search-forward
                  "[,]?#\\+\\(begin\\|end\\)_\\([a-z]+\\)\\($\\|[\s\f\t\n\r\v]\\)"
                  nil t 1)
-            (when-let ((word (match-string-no-properties 1))
+            (when-let* ((word (match-string-no-properties 1))
                        (prefix (if (string= ","
                                             (substring-no-properties
                                              (match-string-no-properties 0)
@@ -1104,7 +1104,7 @@ source block; it defaults to \"src\" if LANGUAGE is provided, otherwise it is
 prompted from the user."
   (interactive)
   (save-excursion
-    (when-let ((info (org-extra-bounds-of-current-block)))
+    (when-let* ((info (org-extra-bounds-of-current-block)))
       (let ((code-start (nth 1 info))
             (code-end (nth 2 info))
             (type (downcase (car info)))
@@ -1985,7 +1985,7 @@ OFF-LABEL. It has no default value."
 (defun org-extra-get-current-column-name ()
   "Retrieve the name of the current column in an Org table."
   (when (org-at-table-p)
-    (when-let ((col (org-table-current-column)))
+    (when-let* ((col (org-table-current-column)))
       (save-excursion
         (goto-char (org-table-begin))
         (when (save-excursion
@@ -2046,7 +2046,7 @@ OFF-LABEL. It has no default value."
                      "Column "
                      'face
                      'transient-heading)
-                    (if-let ((column (or (org-extra-get-current-column-name)
+                    (if-let* ((column (or (org-extra-get-current-column-name)
                                          (org-table-current-column))))
                         (propertize (format "%s" column) 'face 'transient-value)
                       "")))
