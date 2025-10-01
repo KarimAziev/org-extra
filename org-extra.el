@@ -6,7 +6,7 @@
 ;; URL: https://github.com/KarimAziev/org-extra
 ;; Keywords: outlines
 ;; Version: 0.1.1
-;; Package-Requires: ((emacs "29.1") (org "9.6.28") (transient "0.6.0"))
+;; Package-Requires: ((emacs "30.1") (org "9.6.28") (transient "0.6.0"))
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This file is NOT part of GNU Emacs.
@@ -2352,6 +2352,28 @@ OFF-LABEL. It has no default value."
                                           limit t)))
               ((org-at-item-p))))))
 
+(defun org-extra-toggle-links-preview (&optional include-linked beg end)
+  "Toggle inline image display in a specified region.
+
+Optional argument INCLUDE-LINKED determines whether to include linked images.
+
+Optional argument BEG specifies the beginning of the region to process.
+
+Optional argument END specifies the end of the region to process."
+  (interactive "P")
+  (if (org-link-preview--get-overlays beg end)
+      (progn
+        (org-link-preview-clear beg end)
+        (when (called-interactively-p 'interactive)
+          (message "Inline image display turned off")))
+    (org-link-preview-region include-linked nil beg end)
+    (when (called-interactively-p 'interactive)
+      (let ((new (org-link-preview--get-overlays beg end)))
+        (message (if new
+                     (format "%d images displayed inline"
+                             (length new))
+                   "No images to display inline"))))))
+
 ;;;###autoload (autoload 'org-extra-toggle-menu "org-extra" nil t)
 (transient-define-prefix org-extra-toggle-menu ()
   "Toggle various Org mode elements' visibility."
@@ -2359,7 +2381,7 @@ OFF-LABEL. It has no default value."
   :transient-non-suffix #'transient--do-stay
   :refresh-suffixes t
   [["Toggle visibility"
-    ("i" "Images" org-toggle-inline-images)
+    ("i" "Images" org-extra-toggle-links-preview)
     ("I" "Redisplay Inline images" org-redisplay-inline-images)
     ("b" "Block" org-fold-hide-block-toggle)
     ("d" "Drawer" org-fold-hide-drawer-toggle)
@@ -3491,7 +3513,7 @@ more information."
      org-insert-columns-dblock)]
    [""
     ("TAB" "Show/Hide" org-extra-menu-showhide)
-    ("," "Images" org-toggle-inline-images :transient t)
+    ("," "Images" org-extra-toggle-links-preview :transient t)
     ("." "Toggle" org-extra-toggle-menu)
     ("N" "Navigate Headings" org-extra-navigate-headings-menu)
     ("e" "Edit Structure" org-extra-edit-structure-menu)
