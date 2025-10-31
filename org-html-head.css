@@ -478,9 +478,6 @@ dl dd {
 }
 
 code {
-  background: var(--color-white);
-  border: solid 0.0625rem var(--border-color-0);
-  /* color:var(--color-2);  for clickable code */
   font-family: Consolas, 'Andale Mono WT', 'Andale Mono', 'Lucida Console',
     'Lucida Sans Typewriter', 'DejaVu Sans Mono', 'Bitstream Vera Sans Mono',
     'Liberation Mono', 'Nimbus Mono L', Monaco, 'Courier New', Courier,
@@ -489,7 +486,6 @@ code {
   max-width: 100%;
   overflow-x: auto;
   padding: 0 0.3125rem;
-  white-space: nowrap;
 }
 
 .codeblock-example {
