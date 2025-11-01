@@ -193,7 +193,49 @@ transition: 0.3s;`;
   const makePreCopyable = function () {
     document.querySelectorAll('pre').forEach(makeCopyable);
   };
+
+  function styleAdmonitions(options = {}) {
+    const {
+      selector = 'blockquote',
+      replace = true,
+      container = document,
+      tokens = ['WARNING', 'TIP', 'IMPORTANT', 'NOTE', 'CAUTION'],
+    } = options;
+
+    const tokenPattern = tokens.join('|');
+    const startRx = new RegExp('^\\s*\\[!(' + tokenPattern + ')\\]\\s*', 'i');
+
+    const titleMap = {
+      WARNING: 'Warning',
+      TIP: 'Tip',
+      IMPORTANT: 'Important',
+      NOTE: 'Note',
+      CAUTION: 'Caution',
+    };
+
+    container.querySelectorAll(selector).forEach((bq) => {
+      const p = bq.querySelector('p:first-child');
+      if (!p) return;
+      const m = p.textContent.match(startRx);
+      if (!m) return;
+      const token = m[1].toUpperCase();
+      const key = token.toLowerCase();
+
+      bq.classList.add('admonition', key);
+      bq.setAttribute('data-admonition', key);
+
+      if (replace) {
+        const replaceRx = new RegExp('\\[!(' + tokenPattern + ')\\]\\s*', 'i');
+        const title = titleMap[token] || token;
+        p.innerHTML = p.innerHTML.replace(
+          replaceRx,
+          '<span class="admonition-title">' + title + '</span>',
+        );
+      }
+    });
+  }
   makePreCopyable();
   initSideMenu();
   initDarkTheme();
+  styleAdmonitions();
 });

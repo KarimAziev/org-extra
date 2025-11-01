@@ -1342,9 +1342,7 @@ This command is for development purposes."
 
 
 (defun org-extra-update-js ()
-  "Update `org-html-scripts' with CSS content if file is `org-html-head.css'.
-
-This command is for development purposes."
+  "Update `org-html-scripts' with JavaScript content if conditions are met."
   (interactive)
   (when (and buffer-file-name
              (string= (file-name-base buffer-file-name) "org-html-scripts")
@@ -3669,6 +3667,11 @@ Usage example:
            (file-exists-p buffer-file-name))
       (save-buffer)
     (run-hooks 'before-save-hook)))
+
+(defun org-extra-remove-babel-results ()
+  "Remove Babel results from the current Org buffer."
+  (interactive)
+  (org-babel-remove-result-one-or-many '(4)))
 
 (provide 'org-extra)
 ;;; org-extra.el ends here
