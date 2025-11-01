@@ -482,10 +482,8 @@ code {
     'Lucida Sans Typewriter', 'DejaVu Sans Mono', 'Bitstream Vera Sans Mono',
     'Liberation Mono', 'Nimbus Mono L', Monaco, 'Courier New', Courier,
     monospace;
-  font-size: 75%;
   max-width: 100%;
   overflow-x: auto;
-  padding: 0 0.3125rem;
 }
 
 .codeblock-example {
