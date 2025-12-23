@@ -531,14 +531,14 @@ except that ] is never special and \ quotes ^, - or \ (but
     ("SUBTITLE" . "The document’s subtitle.  HTML exporter formats subtitle if
      document type is ‘HTML5’ and the CSS has a ‘subtitle’ class.")))
 
-(defun org-extra-describe-eldoc-setting ()
+(defun org-extra--describe-eldoc-setting ()
   "Return description for current option in #+options."
   (when-let* ((option
                (when-let* ((w (car (split-string
-                                   (buffer-substring-no-properties
-                                    (line-beginning-position)
-                                    (line-end-position))
-                                   nil t))))
+                                    (buffer-substring-no-properties
+                                     (line-beginning-position)
+                                     (line-end-position))
+                                    nil t))))
                  (upcase w)))
               (descr
                (or
@@ -565,10 +565,10 @@ except that ] is never special and \ quotes ^, - or \ (but
                      (cdr (assoc-string str
                                         alist))))))))
     (concat (propertize option 'face 'font-lock-keyword-face) ": "
-            (org-extra-substitute-get-vars
+            (org-extra--substitute-get-vars
              descr))))
 
-(defun org-extra-substitute-get-vars (str)
+(defun org-extra--substitute-get-vars (str)
   "Extract and display buffer-local variables from string STR.
 
 Argument STR is a string containing the text to be processed for variable
@@ -595,7 +595,7 @@ substitution."
 
 (defun org-extra-eldoc-info ()
   "Show extra info."
-  (or (org-extra-describe-eldoc-setting)
+  (or (org-extra--describe-eldoc-setting)
       (when-let* ((el (org-element-at-point))
                   (type (org-element-type el)))
         (if (eq type 'table-row)
@@ -605,7 +605,7 @@ substitution."
                   (key (plist-get pl :key)))
               (pcase key
                 ("STARTUP"
-                 (org-extra-substitute-get-vars
+                 (org-extra--substitute-get-vars
                   (pcase word
                     ("overview" "Top-level headlines only.")
                     ("content" "All headlines.")
@@ -685,7 +685,7 @@ substitution."
                     ("entitiesplain" "Leave entities plain.")
                     (_ "Startup options Org uses when first visiting a file"))))
                 ("OPTIONS"
-                 (or (org-extra-describe-eldoc-setting)
+                 (or (org-extra--describe-eldoc-setting)
                      "Compact form of export options"))
                 ("INFOJS_OPT"
                  (pcase word
@@ -712,7 +712,7 @@ substitution."
                     (concat
                      (propertize (format "%s: (%s): " key type) 'face
                                  'font-lock-keyword-face)
-                     (org-extra-substitute-get-vars descr)))
+                     (org-extra--substitute-get-vars descr)))
                   (format "%s" type))))))))))
 
 (defun org-extra-eldoc-documentation-function (&rest args)
@@ -1441,7 +1441,7 @@ OFF-LABEL. It has no default value."
 (transient-define-prefix org-extra-refresh-reload-menu ()
   "Reload Org configurations with refresh options."
   [("r" "Refresh setup current buffer" org-mode-restart)
-   ("e" "Reload Org (after update) (C-c C-x !)" org-reload)
+   ("e" "Reload Org (after update)" org-reload)
    ("l" "Reload Org uncompiled" org-extra-reload)])
 
 ;;;###autoload (autoload 'org-extra-customize-menu "org-extra" nil t)
@@ -1480,7 +1480,7 @@ OFF-LABEL. It has no default value."
     (lambda ()
       (ignore-errors
         (org-inside-LaTeX-fragment-p))))
-   ("s" "Insert citation (C-c C-x [)" org-reftex-citation)])
+   ("s" "Insert citation" org-reftex-citation)])
 
 
 
@@ -1489,15 +1489,15 @@ OFF-LABEL. It has no default value."
   "Display custom Org mode views for the current file."
   [("t" "TODO Tree" org-show-todo-tree)
    ("c" "Check Deadlines" org-check-deadlines)
-   ("a" "Tags/Property tree (C-c \\)" org-match-sparse-tree)])
+   ("a" "Tags/Property tree" org-match-sparse-tree)])
 
 ;;;###autoload (autoload 'org-extra-file-list-for-agenda-menu "org-extra" nil t)
 (transient-define-prefix org-extra-file-list-for-agenda-menu ()
   "Define transient menu for managing Org agenda files."
   [("e" "Edit File List" org-edit-agenda-file-list)
-   ("a" "Add/Move Current File to Front of List (C-c [)"
+   ("a" "Add/Move Current File to Front of List"
     org-agenda-file-to-front)
-   ("r" "Remove Current File from List (C-c ])" org-remove-file)
+   ("r" "Remove Current File from List" org-remove-file)
    ("c" "Cycle through agenda files" org-cycle-agenda-files :transient t)
    ("o" "Occur in all agenda files" org-occur-in-agenda-files)])
 
@@ -1559,7 +1559,12 @@ OFF-LABEL. It has no default value."
 (transient-define-prefix org-extra-tags-and-properties-menu ()
   "Define a transient menu for Org mode tag and property actions."
   :refresh-suffixes t
-  [("s" "Set Tags (C-c C-q)" org-set-tags-command :inapt-if-not
+  [("s" "Set Tags" org-set-tags-command :inapt-if-not
+    (lambda ()
+      (ignore-errors
+        (not
+         (org-before-first-heading-p)))))
+   ("p" "Set Tags" org-set-tags-command :inapt-if-not
     (lambda ()
       (ignore-errors
         (not
@@ -1568,7 +1573,7 @@ OFF-LABEL. It has no default value."
     (lambda ()
       (ignore-errors
         (org-region-active-p))))
-   ("e" "Set property (C-c C-x p)" org-set-property :inapt-if-not
+   ("e" "Set property" org-set-property :inapt-if-not
     (lambda ()
       (ignore-errors
         (not
@@ -1598,10 +1603,10 @@ OFF-LABEL. It has no default value."
 (transient-define-prefix org-extra-todo-lists-menu ()
   "Display a menu for extra Org mode TODO list actions."
   :refresh-suffixes t
-  [("t" "TODO/DONE/- (C-c C-t)" org-todo :transient t)
+  [("t" "TODO/DONE" org-todo :transient t)
    ("s" "Select keyword" org-extra-select-keyword-menu)
    ("h" "Show TODO Tree" org-show-todo-tree :transient t)
-   ("g" "Global TODO list (C-c k t)" org-todo-list)
+   ("g" "Global TODO list" org-todo-list)
    ("e" org-extra-customize-org-enforce-todo-dependencies
     :description
     (lambda ()
@@ -1646,11 +1651,11 @@ OFF-LABEL. It has no default value."
        "*" ""
        "(" ")"))
     :transient t)
-   ("p" "Set Priority (C-c ,)" org-priority)
+   ("p" "Set Priority" org-priority)
    ("r" org-extra-shiftup)
    ("i" org-extra-shiftdown)
-   ("n" "Get news from all feeds (C-c C-x g)" org-feed-update-all)
-   ("b" "Go to the inbox of a feed... (C-c C-x G)" org-feed-goto-inbox)
+   ("n" "Get news from all feeds" org-feed-update-all)
+   ("b" "Go to the inbox of a feed..." org-feed-goto-inbox)
    ("c" "Customize feeds" org-extra-customize-feed)])
 
 ;;;###autoload (autoload 'org-extra-select-keyword-menu "org-extra" nil t)
@@ -1732,15 +1737,15 @@ OFF-LABEL. It has no default value."
       (ignore-errors
         (org-at-heading-p))))
    ""
-   ("c" "Copy Subtree (C-c C-x M-w)" org-copy-special :inapt-if-not
+   ("c" "Copy Subtree" org-copy-special :inapt-if-not
     (lambda ()
       (ignore-errors
         (org-in-subtree-not-table-p))))
-   ("u" "Cut Subtree (C-c C-x C-w)" org-cut-special :inapt-if-not
+   ("u" "Cut Subtree" org-cut-special :inapt-if-not
     (lambda ()
       (ignore-errors
         (org-in-subtree-not-table-p))))
-   ("p" "Paste Subtree (C-c C-x C-y)" org-paste-special :inapt-if-not
+   ("p" "Paste Subtree" org-paste-special :inapt-if-not
     (lambda ()
       (ignore-errors
         (not
@@ -1797,10 +1802,10 @@ OFF-LABEL. It has no default value."
       (ignore-errors
         (not
          (org-at-table-p)))))
-   ("s" "Sparse Tree... (C-c /)" org-sparse-tree)
-   ("r" "Reveal Context (C-c C-r)" org-fold-reveal)
+   ("s" "Sparse Tree..." org-sparse-tree)
+   ("r" "Reveal Context" org-fold-reveal)
    ("h" "Show All" org-fold-show-all)
-   ("u" "Subtree to indirect buffer (C-c C-x b)" org-tree-to-indirect-buffer)])
+   ("u" "Subtree to indirect buffer" org-tree-to-indirect-buffer)])
 
 ;;;###autoload
 (defun org-extra-remove-all-results ()
@@ -2446,7 +2451,9 @@ Optional argument END specifies the end of the region to process."
   (interactive)
   (if org-columns-current-fmt
       (org-columns-quit)
-    (org-columns)))
+    (org-columns))
+  (when transient-current-command
+    (transient-setup transient-current-command)))
 
 ;;;###autoload (autoload 'org-extra-menu-archive "org-extra" nil t)
 (transient-define-prefix org-extra-menu-archive ()
@@ -2594,11 +2601,11 @@ Optional argument END specifies the end of the region to process."
    ("g" "TAGS and Properties" org-extra-tags-and-properties-menu)
    ("c" "Dates and Scheduling" org-extra-dates-and-scheduling-menu)
    ("l" "Logging work" org-extra-logging-work-menu)
-   ("o" "Agenda Command... (C-c A)" org-agenda)
-   ("i" "Set Restriction Lock (C-c C-x <)" org-agenda-set-restriction-lock)
+   ("o" "Agenda Command..." org-agenda)
+   ("i" "Set Restriction Lock" org-agenda-set-restriction-lock)
    ("f" "File List for Agenda" org-extra-file-list-for-agenda-menu)
    ("p" "Special views current file" org-extra-special-views-current-file-menu)
-   ("x" "Export/Publish... (C-c C-e)" org-export-dispatch)
+   ("x" "Export/Publish..." org-export-dispatch)
    ("b" "LaTeX" org-extra-latex-menu)
    ("u" "Documentation" org-extra-documentation-menu)
    ("m" "Customize" org-extra-customize-menu)
@@ -3608,7 +3615,6 @@ more information."
   (org-table-map-tables
    #'org-extra-table-maybe-shrink
    t))
-
 
 
 (defvar org-extra-file-extensions-mime-type-alist
