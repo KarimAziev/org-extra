@@ -1389,7 +1389,9 @@ head to an empty string."
       (widen)
     (pcase-let ((`(,_type ,beg ,end)
                  (org-extra-bounds-of-current-block)))
-      (narrow-to-region beg end))))
+      (if (and beg end)
+          (narrow-to-region beg end)
+        (org-narrow-to-element)))))
 
 (defun org-extra--bar-make-toggle-description (description value &optional
                                                            on-label off-label
@@ -1564,11 +1566,7 @@ OFF-LABEL. It has no default value."
       (ignore-errors
         (not
          (org-before-first-heading-p)))))
-   ("p" "Set Tags" org-set-tags-command :inapt-if-not
-    (lambda ()
-      (ignore-errors
-        (not
-         (org-before-first-heading-p)))))
+   ("p" "Create a sparse tree" org-tags-sparse-tree)
    ("c" "Change tag in region" org-change-tag-in-region :inapt-if-not
     (lambda ()
       (ignore-errors
@@ -2552,7 +2550,7 @@ Optional argument END specifies the end of the region to process."
     ("'" "Edit Source Example" org-edit-special)
     ""
     ("f" "Footnote new/jump" org-footnote-action)
-    ("F" "Footnote extra" org-extra-footnote)]])
+    ("F" "Footnote dwim" org-extra-footnote)]])
 
 
 
